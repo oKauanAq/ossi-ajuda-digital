@@ -6,4 +6,11 @@ const ARQUIVOS = [
   './assets/logo-ossi.jpg', './assets/icons/icon-192.svg', './assets/icons/icon-512.svg'
 ];
 self.addEventListener('install', (e) => e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARQUIVOS))));
-self.addEventListener('fetch', (e) => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));
+self.addEventListener('fetch', (e) => {
+  const url = new URL(e.request.url);
+  if (url.pathname === '/api/sergio') {
+    e.respondWith(fetch(e.request));
+    return;
+  }
+  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+});
