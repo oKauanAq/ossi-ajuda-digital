@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#7b2d26" />
+  <title>OSSI Ajuda Digital</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="topo">
+    <img src="assets/logo-ossi.jpg" alt="Logo da OSSI" class="logo" />
+    <h1>OSSI Ajuda Digital</h1>
+    <p class="sub">Assistente: <strong>Sérgio</strong></p>
+  </header>
+
+  <main class="container">
+    <section class="acoes-principais">
+      <button class="btn" data-target="categorias">Categorias de dúvidas</button>
+      <button class="btn" data-target="busca">Buscar dúvida</button>
+      <button class="btn" data-target="sergio">Falar com o Sérgio</button>
+      <button class="btn destaque" data-target="seguranca">Modo Segurança</button>
+      <button class="btn" data-target="instalar">Como adicionar à tela inicial</button>
+      <a class="btn" href="https://forms.gle/" target="_blank" rel="noopener noreferrer">Avaliar o sistema</a>
+    </section>
+
+    <section id="categorias" class="card hidden">
+      <h2>Categorias</h2>
+      <div id="lista-categorias" class="lista"></div>
+    </section>
+
+    <section id="busca" class="card hidden">
+      <h2>Busca simples</h2>
+      <input id="campo-busca" type="text" placeholder="Digite sua dúvida" />
+      <button id="btn-buscar" class="btn">Buscar</button>
+      <div id="resultado-busca"></div>
+    </section>
+
+    <section id="sergio" class="card hidden">
+      <h2>Assistente Sérgio</h2>
+      <label for="pergunta-sergio">Escreva sua dúvida:</label>
+      <input id="pergunta-sergio" type="text" placeholder="Ex.: Recebi link no WhatsApp" />
+      <button id="btn-sergio" class="btn">Perguntar ao Sérgio</button>
+      <div id="resposta-sergio"></div>
+    </section>
+
+    <section id="seguranca" class="card hidden">
+      <h2>Modo Segurança</h2>
+      <p>Se houver medo de golpe, número desconhecido ou compra suspeita:</p>
+      <ol>
+        <li><strong>PARE.</strong> Não clique em links.</li>
+        <li><strong>NÃO envie</strong> senha, CPF, código ou foto de documento.</li>
+        <li><strong>NÃO faça</strong> Pix, compra ou confirmação.</li>
+        <li><strong>PEÇA AJUDA</strong> de familiar, cuidador ou equipe da OSSI.</li>
+      </ol>
+    </section>
+
+    <section id="instalar" class="card hidden">
+      <h2>Adicionar à tela inicial</h2>
+      <h3>Android (Chrome)</h3>
+      <p>Abra o site, toque em menu (3 pontos) e escolha <strong>Adicionar à tela inicial</strong>.</p>
+      <h3>iPhone (Safari)</h3>
+      <p>Abra o site, toque em compartilhar e escolha <strong>Adicionar à Tela de Início</strong>.</p>
+    </section>
+
+    <section id="faq" class="card hidden">
+      <h2 id="faq-titulo">Dúvidas</h2>
+      <div id="faq-lista"></div>
+    </section>
+  </main>
+
+  <script src="js/tts.js"></script>
+  <script src="js/search.js"></script>
+  <script src="js/sergio.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
