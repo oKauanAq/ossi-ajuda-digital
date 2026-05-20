@@ -25,11 +25,12 @@ async function perguntarIA(pergunta, timeoutMs = 8000) {
     }
 
     const dados = await resposta.json();
-    if (!dados?.resposta) {
+    const r = dados?.resposta;
+    if (!r || !r.respostaSimples || !Array.isArray(r.passoAPasso) || !r.atencao || !r.quandoPedirAjuda) {
       throw new Error('Resposta inválida da IA');
     }
 
-    return dados.resposta;
+    return r;
   } finally {
     clearTimeout(timer);
   }

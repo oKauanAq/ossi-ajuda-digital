@@ -55,7 +55,7 @@ function initSergio() {
 
     try {
       const respostaIA = await perguntarIA(pergunta);
-      saida.innerHTML = `<div class="bloco-sergio"><p><strong>Resposta da IA (Vercel):</strong> ${respostaIA}</p></div>`;
+      saida.innerHTML = montarResposta(respostaIA).html;
     } catch (_) {
       saida.innerHTML = respostaLocal.html;
     }
