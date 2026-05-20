@@ -6,30 +6,23 @@ function mostrar(secaoId) {
   document.getElementById(secaoId)?.classList.remove('hidden');
 }
 
-function renderFaq(lista) {
-  const wrap = document.getElementById('faq-lista');
-  wrap.innerHTML = lista.map(item => {
-    const bloco = montarResposta(item);
-    return `<article class="item-faq"><h4>${item.pergunta}</h4>${bloco.html}</article>`;
-  }).join('');
+function renderFaq(lista, elId='faq-lista') {
+  const wrap = document.getElementById(elId);
+  wrap.innerHTML = lista.map(item => `<article class="item-faq"><h4>${item.pergunta}</h4>${montarResposta(item).html}</article>`).join('');
 }
 
 function initNavegacao() {
-  document.querySelectorAll('[data-target]').forEach(btn => {
-    btn.addEventListener('click', () => mostrar(btn.dataset.target));
-  });
+  document.querySelectorAll('[data-target]').forEach(btn => btn.addEventListener('click', () => mostrar(btn.dataset.target)));
 }
 
 function initCategorias() {
   const lista = document.getElementById('lista-categorias');
   lista.innerHTML = CATEGORIAS.map(cat => `<button class="btn">${cat}</button>`).join('');
-  [...lista.querySelectorAll('button')].forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.getElementById('faq-titulo').textContent = btn.textContent;
-      renderFaq(FAQ.filter(i => i.categoria === btn.textContent));
-      mostrar('faq');
-    });
-  });
+  [...lista.querySelectorAll('button')].forEach(btn => btn.addEventListener('click', () => {
+    document.getElementById('faq-titulo').textContent = btn.textContent;
+    renderFaq(FAQ.filter(i => i.categoria === btn.textContent));
+    mostrar('faq');
+  }));
 }
 
 function initBusca() {
@@ -37,10 +30,12 @@ function initBusca() {
     const termo = document.getElementById('campo-busca').value;
     const res = filtrarFaq(FAQ, termo);
     const out = document.getElementById('resultado-busca');
-    out.innerHTML = res.length ? '' : '<p>Nada encontrado. Tente outra palavra.</p>';
-    if (res.length) {
-      out.innerHTML = '<p>Resultados:</p>' + res.map(r => `<p>• ${r.pergunta}</p>`).join('');
+    if (!res.length) {
+      out.innerHTML = '<p>Nada encontrado. Tente outra palavra.</p>';
+      return;
     }
+    out.innerHTML = '<h3>Resultados</h3><div id="busca-lista"></div>';
+    renderFaq(res.slice(0, 8), 'busca-lista');
   });
 }
 
@@ -49,8 +44,7 @@ function initSergio() {
     const pergunta = document.getElementById('pergunta-sergio').value.trim();
     const saida = document.getElementById('resposta-sergio');
     if (!pergunta) return;
-    const p = pergunta.toLowerCase();
-    const melhor = FAQ.find(i => p.includes(i.categoria.toLowerCase()) || p.includes(i.pergunta.toLowerCase().slice(0, 12)));
+    const melhor = encontrarMelhorResposta(FAQ, pergunta);
     const resposta = melhor ? montarResposta(melhor) : respostaPadraoSegura();
     const alerta = ehSensivel(pergunta) ? '<p><strong>Segurança:</strong> Pare e peça ajuda de alguém de confiança.</p>' : '';
     saida.innerHTML = alerta + resposta.html;
@@ -70,8 +64,5 @@ async function init() {
   initSergio();
 }
 
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => navigator.serviceWorker.register('service-worker.js'));
-}
-
+if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('service-worker.js'));
 init();
