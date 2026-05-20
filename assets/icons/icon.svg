@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#f7f4ee"/>
+  <rect x="40" y="40" width="432" height="432" rx="42" fill="#7b2d26"/>
+  <rect x="95" y="95" width="322" height="322" rx="30" fill="#c89d2a"/>
+  <text x="256" y="286" text-anchor="middle" font-size="140" font-family="Arial" fill="#7b2d26">OSSI</text>
+</svg>
