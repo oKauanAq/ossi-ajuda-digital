@@ -38,3 +38,18 @@ PWA estática para apoiar idosos da Obra Social Santa Isabel (OSSI) com dúvidas
 - Não possui login/cadastro.
 - Não possui backend, banco de dados ou API externa.
 - Não faz Pix, compras, acesso bancário ou gov.br.
+
+
+## Integração opcional de IA (Vercel + NVIDIA)
+- O projeto continua funcionando no GitHub Pages com biblioteca local (`data/faq.json`).
+- A IA é opcional e funciona apenas quando publicado na Vercel com Function em `api/sergio.js`.
+
+### Como configurar na Vercel
+1. Importar o repositório na Vercel.
+2. Em **Settings > Environment Variables**, criar `NVIDIA_API_KEY`.
+3. Fazer deploy.
+
+### Segurança
+- A chave fica somente no backend (`process.env.NVIDIA_API_KEY`).
+- Nunca colocar chave no frontend, no GitHub ou em commits.
+- Perguntas sensíveis (senha, CPF, cartão, código, documento, Pix, banco, dinheiro, saúde, link suspeito ou golpe) não são enviadas para IA; o sistema responde localmente em modo seguro.

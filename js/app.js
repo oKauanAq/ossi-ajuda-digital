@@ -40,14 +40,25 @@ function initBusca() {
 }
 
 function initSergio() {
-  document.getElementById('btn-sergio').addEventListener('click', () => {
+  document.getElementById('btn-sergio').addEventListener('click', async () => {
     const pergunta = document.getElementById('pergunta-sergio').value.trim();
     const saida = document.getElementById('resposta-sergio');
     if (!pergunta) return;
     const melhor = encontrarMelhorResposta(FAQ, pergunta);
-    const resposta = melhor ? montarResposta(melhor) : respostaPadraoSegura();
-    const alerta = ehSensivel(pergunta) ? '<p><strong>Segurança:</strong> Pare e peça ajuda de alguém de confiança.</p>' : '';
-    saida.innerHTML = alerta + resposta.html;
+    const respostaLocal = melhor ? montarResposta(melhor) : respostaPadraoSegura();
+
+    if (deveBloquearIA(pergunta) || ehSensivel(pergunta)) {
+      const alerta = '<p><strong>Segurança:</strong> Esse tema é sensível. Não compartilhe dados pessoais. Peça ajuda de alguém de confiança.</p>';
+      saida.innerHTML = alerta + respostaLocal.html;
+      return;
+    }
+
+    try {
+      const respostaIA = await perguntarIA(pergunta);
+      saida.innerHTML = montarResposta(respostaIA).html;
+    } catch (_) {
+      saida.innerHTML = respostaLocal.html;
+    }
   });
 }
 
