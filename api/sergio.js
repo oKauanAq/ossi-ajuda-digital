@@ -14,14 +14,31 @@ const TIPOS_PUBLICOS = {
 };
 
 function normalizarTexto(texto = '') { return texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim(); }
-function temDadoPessoal(texto = '') { return /(senha|cpf|cartao|cartao|documento|rg|codigo|token|pix|dados bancarios)/i.test(String(texto)); }
+function temDadoPessoal(texto = '') { return /(senha|cpf|cartao|documento|rg|codigo|token|pix|dados bancarios)/i.test(String(texto)); }
+
+function limparCampoResposta(valor = '') {
+  return String(valor)
+    .replace(/```json|```/gi, ' ')
+    .replace(/[{}\[\]"]/g, ' ')
+    .replace(/\\[nrt]/g, ' ')
+    .replace(/\\/g, ' ')
+    .replace(/\b(resposta\s*simples|respostasimples|passo\s*a\s*passo|passoapasso|atencao|aten[cç][aã]o|quando\s*pedir\s*ajuda|quandopedirajuda)\s*[:=-]?/gi, ' ')
+    .replace(/\s*,\s*/g, ', ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^[,:;\-]+/, '')
+    .replace(/[,:;\-]+$/, '')
+    .slice(0, 420);
+}
 
 function respostaPadrao(resposta = {}, defaults = {}) {
   return {
-    respostaSimples: String(resposta.respostaSimples || defaults.respostaSimples || 'Vamos resolver isso com calma.'),
-    passoAPasso: Array.isArray(resposta.passoAPasso) ? resposta.passoAPasso.map(String).filter(Boolean).slice(0, 6) : (defaults.passoAPasso || []),
-    atencao: String(resposta.atencao || defaults.atencao || 'Não compartilhe dados pessoais.'),
-    quandoPedirAjuda: String(resposta.quandoPedirAjuda || defaults.quandoPedirAjuda || 'Peça ajuda se tiver dúvida.')
+    respostaSimples: limparCampoResposta(resposta.respostaSimples || defaults.respostaSimples || 'Não consegui organizar bem essa resposta. Tente perguntar de outro jeito.'),
+    passoAPasso: Array.isArray(resposta.passoAPasso)
+      ? resposta.passoAPasso.map((p) => limparCampoResposta(p)).filter(Boolean).slice(0, 6)
+      : (defaults.passoAPasso || []).map((p) => limparCampoResposta(p)).filter(Boolean).slice(0, 6),
+    atencao: limparCampoResposta(resposta.atencao || defaults.atencao || 'Não envie senha, código, CPF, cartão ou dados bancários.'),
+    quandoPedirAjuda: limparCampoResposta(resposta.quandoPedirAjuda || defaults.quandoPedirAjuda || 'Peça ajuda se aparecer link estranho, pedido de dinheiro ou mensagem suspeita.')
   };
 }
 const pacote = (tipo, resposta, origem) => ({ tipo, resposta, origem });
@@ -61,16 +78,55 @@ function buscarContextoFaq(pergunta, limite = 4) {
   return carregarFaq().filter((i) => normalizarTexto(`${i.categoria} ${i.pergunta} ${(i.palavrasChave || []).join(' ')}`).split(' ').some((tok) => tok && q.includes(tok))).slice(0, limite);
 }
 
+function extrairCamposPorMarcador(texto = '') {
+  const mapa = {
+    respostaSimples: /(resposta\s*simples|respostasimples)\s*[:=-]/i,
+    passoAPasso: /(passo\s*a\s*passo|passoapasso)\s*[:=-]/i,
+    atencao: /(atencao|aten[cç][aã]o)\s*[:=-]/i,
+    quandoPedirAjuda: /(quando\s*pedir\s*ajuda|quandopedirajuda)\s*[:=-]/i
+  };
+  const marcas = Object.entries(mapa).map(([k, re]) => ({ k, idx: texto.search(re), re })).filter((m) => m.idx >= 0).sort((a, b) => a.idx - b.idx);
+  if (!marcas.length) return null;
+
+  const saida = {};
+  for (let i = 0; i < marcas.length; i += 1) {
+    const atual = marcas[i];
+    const prox = marcas[i + 1];
+    const inicio = texto.slice(atual.idx).search(atual.re);
+    const offset = atual.idx + inicio;
+    const aposMarcador = texto.slice(offset).replace(atual.re, '');
+    const bloco = prox ? aposMarcador.slice(0, prox.idx - offset) : aposMarcador;
+    saida[atual.k] = limparCampoResposta(bloco);
+  }
+  if (saida.passoAPasso && !Array.isArray(saida.passoAPasso)) {
+    saida.passoAPasso = saida.passoAPasso.split(/\s*(?:\n|;|\.|,\s(?=[A-ZÀ-Ú]))\s*/).map(limparCampoResposta).filter(Boolean);
+  }
+  return saida;
+}
+
 function parseIA(raw = '') {
-  const text = String(raw).replace(/```json/gi, '').replace(/```/g, '').trim();
-  const i = text.indexOf('{'); const f = text.lastIndexOf('}');
-  const candidates = [text, (i >= 0 && f > i) ? text.slice(i, f + 1) : ''];
-  for (const c of candidates) { if (!c) continue; try { return respostaPadrao(JSON.parse(c)); } catch {} }
-  return respostaPadrao({ respostaSimples: text.slice(0, 260), passoAPasso: ['Siga com calma.', 'Se houver risco, pare e peça ajuda.'] });
+  const text = String(raw).trim();
+  const semMarkdown = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+  const i = semMarkdown.indexOf('{'); const f = semMarkdown.lastIndexOf('}');
+  const candidates = [semMarkdown, (i >= 0 && f > i) ? semMarkdown.slice(i, f + 1) : ''];
+  for (const c of candidates) {
+    if (!c) continue;
+    try { return respostaPadrao(JSON.parse(c)); } catch {}
+  }
+
+  const extraido = extrairCamposPorMarcador(semMarkdown);
+  if (extraido) return respostaPadrao(extraido, { passoAPasso: ['Escreva sua dúvida com uma frase simples.', 'Diga qual aplicativo ou situação apareceu.', 'Se envolver senha, dinheiro ou golpe, peça ajuda antes de agir.'] });
+
+  return respostaPadrao({
+    respostaSimples: 'Não consegui organizar bem essa resposta. Tente perguntar de outro jeito.',
+    passoAPasso: ['Escreva sua dúvida com uma frase simples.', 'Diga qual aplicativo ou situação apareceu.', 'Se envolver senha, dinheiro ou golpe, peça ajuda antes de agir.'],
+    atencao: 'Não envie senha, código, CPF, cartão ou dados bancários.',
+    quandoPedirAjuda: 'Peça ajuda se aparecer link estranho, pedido de dinheiro ou mensagem suspeita.'
+  });
 }
 
 async function chamarNvidia(pergunta, contextoFaq, intencao, historicoSeguro) {
-  const system = 'Você é Sérgio, um chatbot de IA acolhedor para idosos da OSSI. Converse de forma simples, paciente e segura. Você pode responder dúvidas gerais do dia a dia, mas tem especialidade em inclusão digital, celular, internet, aplicativos, mensagens e segurança contra golpes. Use o histórico da conversa para manter contexto. A biblioteca interna é apoio, não limite. Nunca peça senha, CPF, cartão, código, documento ou dados bancários. Se houver risco, oriente parar e pedir ajuda. Responda SEMPRE em JSON com: respostaSimples, passoAPasso, atencao, quandoPedirAjuda.';
+  const system = 'Você é Sérgio, um chatbot de IA acolhedor para idosos da OSSI. Responda em português do Brasil, com linguagem simples. Nunca peça senha, CPF, cartão, código, documento ou dados bancários. Responda SOMENTE em JSON válido, sem markdown, sem texto antes ou depois. O JSON deve ter exatamente: {"respostaSimples":"...","passoAPasso":["...","..."],"atencao":"...","quandoPedirAjuda":"..."}. Não use os nomes dos campos dentro dos textos. Não escreva respostaSimples dentro de respostaSimples. Não escreva passoAPasso dentro do passo.';
   const payload = {
     model: MODELO_NVIDIA,
     temperature: 0.2,
@@ -104,6 +160,11 @@ export default async function handler(req, res) {
     const tipo = intencao === 'duvida_digital' ? TIPOS_PUBLICOS.duvida_digital : TIPOS_PUBLICOS.duvida_geral;
     return res.status(200).json(pacote(tipo, resposta, contexto.length ? 'faq' : 'ia'));
   } catch {
-    return res.status(200).json(pacote(TIPOS_PUBLICOS.fallback, respostaPadrao({ respostaSimples: 'Não consegui usar IA agora, mas posso te orientar com segurança.', passoAPasso: ['Explique sua dúvida com outras palavras.', 'Se for sobre aplicativo, diga o nome e o que apareceu.', 'Se houver risco, não envie dados e peça ajuda.'] }), 'local'));
+    return res.status(200).json(pacote(TIPOS_PUBLICOS.fallback, respostaPadrao({
+      respostaSimples: 'Não consegui organizar bem essa resposta. Tente perguntar de outro jeito.',
+      passoAPasso: ['Escreva sua dúvida com uma frase simples.', 'Diga qual aplicativo ou situação apareceu.', 'Se envolver senha, dinheiro ou golpe, peça ajuda antes de agir.'],
+      atencao: 'Não envie senha, código, CPF, cartão ou dados bancários.',
+      quandoPedirAjuda: 'Peça ajuda se aparecer link estranho, pedido de dinheiro ou mensagem suspeita.'
+    }), 'local'));
   }
 }

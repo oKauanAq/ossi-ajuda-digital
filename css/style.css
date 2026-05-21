@@ -31,23 +31,23 @@ h1 { margin: 8px 0; font-size: 1.7rem; color: var(--vinho); }
 }
 .sergio-widget-header { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-bottom: 2px solid #eee; padding-bottom: 8px; margin-bottom: 8px; }
 .sergio-widget-header h2 { margin: 0; font-size: 1.05rem; color: var(--vinho); }
-.small-btn { background: var(--dourado); color: #000; border: 0; padding: 10px 12px; border-radius: 8px; font-size: .9rem; font-weight: 700; }
+.small-btn { background: var(--dourado); color: #000; border: 0; padding: 12px 14px; border-radius: 10px; font-size: 1.1rem; font-weight: 700; }
 .chat-sergio { background: #f8f8f8; border: 2px solid #c9c9c9; border-radius: 12px; min-height: 260px; max-height: 360px; overflow-y: auto; padding: 12px; margin-bottom: 12px; }
 .msg { display: flex; margin-bottom: 12px; }
 .msg p { margin: 0; }
 .msg-user { justify-content: flex-end; }
 .msg-user p { background: #7b2d26; color: #fff; border-radius: 16px 16px 4px 16px; padding: 12px 14px; max-width: 90%; }
 .msg-assistant { justify-content: flex-start; }
-.msg-assistant .bloco-sergio { background: #fff; border: 2px solid #e2c15f; border-radius: 16px 16px 16px 4px; padding: 12px; max-width: 95%; }
-.resposta-destaque { font-weight: 700; font-size: 1rem; margin-bottom: 10px !important; }
-.passos-sergio { padding-left: 0; list-style: none; display: grid; gap: 8px; }
-.passos-sergio li { display: flex; gap: 8px; align-items: flex-start; background: #f7f4ee; border-radius: 10px; padding: 8px; }
-.passo-numero { background: var(--vinho); color: #fff; width: 28px; height: 28px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.caixa-atencao { background: #fff3b7; padding: 8px; border-radius: 8px; }
-.caixa-ajuda { background: #eef4ff; padding: 8px; border-radius: 8px; }
+.msg-assistant .bloco-sergio { background: #fff; border: 2px solid #c8a13f; border-radius: 16px 16px 16px 4px; padding: 16px; max-width: 100%; line-height: 1.6; }
+.resposta-destaque { font-weight: 700; font-size: 1.38rem; margin-bottom: 14px !important; }
+.passos-sergio { padding-left: 0; list-style: none; display: grid; gap: 12px; }
+.passos-sergio li { display: flex; gap: 12px; align-items: flex-start; background: #f7f4ee; border-radius: 12px; padding: 12px; font-size: 1.25rem; }
+.passo-numero { background: var(--vinho); color: #fff; width: 36px; height: 36px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.2rem; font-weight: 700; }
+.caixa-atencao { background: #fff3b7; padding: 10px; border-radius: 10px; font-size: 1.2rem; }
+.caixa-ajuda { background: #eef4ff; padding: 10px; border-radius: 10px; font-size: 1.2rem; }
 .apoio-visual { display: flex; align-items: center; gap: 8px; background: #eef8f0; border: 1px solid #cae8d2; border-radius: 10px; padding: 8px; margin-bottom: 10px; font-weight: 700; }
 .chat-acoes { display: grid; gap: 10px; }
-.chat-acoes input { width: 100%; font-size: 1rem; padding: 12px; border: 2px solid #bbb; border-radius: 10px; }
+.chat-acoes input { width: 100%; font-size: 1.2rem; padding: 14px; border: 2px solid #888; border-radius: 10px; }
 .chat-botoes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .status-microfone { margin: 8px 0; color: #1f4f96; font-weight: 700; }
 
@@ -62,10 +62,12 @@ h1 { margin: 8px 0; font-size: 1.7rem; color: var(--vinho); }
 .sergio-widget-header h2 { display:flex; align-items:center; gap:8px; }
 .msg-assistant { align-items:flex-start; gap:8px; }
 .sergio-msg-avatar { width: 34px; height:34px; border-radius:50%; background:#fff3b7; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
-.btn-ouvir { margin-top: 10px; font-size: 1rem; }
+.btn-ouvir { margin-top: 12px; font-size: 1.15rem; padding: 12px 14px; }
 #btn-sergio-mic { background: #1f4f96; }
 .chips-wrap { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
-.chip-sergio { border:2px solid #7b2d26; background:#fff; color:#1f1f1f; border-radius:999px; padding:10px 14px; font-size:1rem; font-weight:700; }
+.chip-sergio { border:2px solid #7b2d26; background:#fff; color:#1f1f1f; border-radius:999px; padding:10px 14px; font-size:1.1rem; font-weight:700; }
+.auto-enviar-wrap { font-size: 1.05rem; display: flex; align-items: center; gap: 8px; }
+.privacidade-mic { margin: 0; color: #2c2c2c; font-size: .95rem; }
 .chip-sergio.secundario { border-color:#1d8f4e; }
 .duvidas-comuns { margin-top: 14px; border:2px solid #d9d9d9; border-radius:12px; padding:10px; background:#fff; }
 .duvidas-comuns h3 { margin:0; color:#7b2d26; }

@@ -58,7 +58,7 @@ function restaurarHistorico() {
 }
 
 function renderChips(perguntas, classe = '') {
-  return perguntas.map((item) => `<button type="button" class="chip-sergio ${classe}" data-question="${item.pergunta || item}">${item.label || item}</button>`).join('');
+  return perguntas.map((item) => `<button type="button" class="chip-sergio ${classe}" data-question="${escaparHtml(item.pergunta || item)}">${escaparHtml(item.label || item)}</button>`).join('');
 }
 
 function renderChatSergio() {
@@ -79,8 +79,8 @@ function renderChatSergio() {
   }
 
   chat.innerHTML = historicoSergio.map((msg) => {
-    if (msg.role === 'user') return `<div class="msg msg-user"><p>${msg.content}</p></div>`;
-    const bloco = msg.respostaEstruturada ? montarResposta(msg.respostaEstruturada, msg.contextoPergunta).html : `<div class="bloco-sergio"><p class="resposta-destaque">${msg.content}</p></div>`;
+    if (msg.role === 'user') return `<div class="msg msg-user"><p>${escaparHtml(msg.content)}</p></div>`;
+    const bloco = msg.respostaEstruturada ? montarResposta(msg.respostaEstruturada, msg.contextoPergunta).html : `<div class="bloco-sergio"><p class="resposta-destaque">${escaparHtml(msg.content)}</p></div>`;
     const avatarHtml = avatarSergio ? `<img src="${avatarSergio}" class="sergio-avatar" alt="Avatar do Sérgio" />` : '👨‍🏫';
     return `<div class="msg msg-assistant"><span class="sergio-msg-avatar" aria-hidden="true">${avatarHtml}</span>${bloco}</div>`;
   }).join('');
