@@ -5,8 +5,10 @@ const STORAGE_SERGIO = 'ossi-sergio-chat';
 const historicoSergio = [];
 
 function mostrar(secaoId) {
-  document.querySelectorAll('.card').forEach((el) => el.classList.add('hidden'));
-  document.getElementById(secaoId)?.classList.remove('hidden');
+  document.querySelectorAll('main .card').forEach((el) => {
+    if (el.id) el.classList.add('hidden');
+  });
+  if (secaoId) document.getElementById(secaoId)?.classList.remove('hidden');
 }
 
 function renderFaq(lista, elId = 'faq-lista') {
@@ -18,28 +20,9 @@ function initNavegacao() {
   document.querySelectorAll('[data-target]').forEach((btn) => btn.addEventListener('click', () => mostrar(btn.dataset.target)));
 }
 
-function initCategorias() {
-  const lista = document.getElementById('lista-categorias');
-  lista.innerHTML = CATEGORIAS.map((cat) => `<button class="btn">${cat}</button>`).join('');
-  [...lista.querySelectorAll('button')].forEach((btn) => btn.addEventListener('click', () => {
-    document.getElementById('faq-titulo').textContent = btn.textContent;
-    renderFaq(FAQ.filter((i) => i.categoria === btn.textContent));
-    mostrar('faq');
-  }));
-}
-
-function initBusca() {
-  document.getElementById('btn-buscar').addEventListener('click', () => {
-    const termo = document.getElementById('campo-busca').value;
-    const res = filtrarFaq(FAQ, termo);
-    const out = document.getElementById('resultado-busca');
-    if (!res.length) {
-      out.innerHTML = '<p>Nada encontrado. Tente outra palavra.</p>';
-      return;
-    }
-    out.innerHTML = '<h3>Resultados</h3><div id="busca-lista"></div>';
-    renderFaq(res.slice(0, 8), 'busca-lista');
-  });
+function initFaq() {
+  const porCategoria = CATEGORIAS.flatMap((categoria) => FAQ.filter((item) => item.categoria === categoria));
+  renderFaq(porCategoria.length ? porCategoria : FAQ);
 }
 
 function salvarHistorico() { localStorage.setItem(STORAGE_SERGIO, JSON.stringify(historicoSergio.slice(-30))); }
@@ -57,18 +40,37 @@ function renderChatSergio() {
   const chat = document.getElementById('chat-sergio');
   chat.innerHTML = historicoSergio.map((msg) => {
     if (msg.role === 'user') return `<div class="msg msg-user"><p>${msg.content}</p></div>`;
-    const bloco = msg.respostaEstruturada ? montarResposta(msg.respostaEstruturada).html : `<div class="bloco-sergio"><p>${msg.content}</p></div>`;
+    const bloco = msg.respostaEstruturada ? montarResposta(msg.respostaEstruturada, msg.contextoPergunta).html : `<div class="bloco-sergio"><p class="resposta-destaque">${msg.content}</p></div>`;
     return `<div class="msg msg-assistant">${bloco}</div>`;
   }).join('');
   chat.scrollTop = chat.scrollHeight;
 }
 
-function initSergio() {
+function initWidgetSergio() {
+  const toggle = document.getElementById('sergio-widget-toggle');
+  const widget = document.getElementById('sergio-widget');
+  const closeBtn = document.getElementById('sergio-widget-close');
+
+  const alternarWidget = (abrir = null) => {
+    const abrirAgora = abrir !== null ? abrir : widget.classList.contains('hidden');
+    widget.classList.toggle('hidden', !abrirAgora);
+    if (abrirAgora) document.getElementById('pergunta-sergio')?.focus();
+  };
+
+  toggle.addEventListener('click', () => alternarWidget());
+  closeBtn.addEventListener('click', () => alternarWidget(false));
+
+  return { alternarWidget };
+}
+
+function initSergio(widgetApi) {
   const botao = document.getElementById('btn-sergio');
   const campo = document.getElementById('pergunta-sergio');
   const botaoLimpar = document.getElementById('btn-limpar-sergio');
+
   restaurarHistorico();
   renderChatSergio();
+  initMicrofone(campo);
 
   const enviarPergunta = async () => {
     const pergunta = campo.value.trim();
@@ -88,20 +90,20 @@ function initSergio() {
       const respostaIA = await perguntarIA(pergunta, contexto);
       if (requestId !== sergioRequestId) return;
       historicoSergio.pop();
-      historicoSergio.push({ role: 'assistant', content: respostaIA.respostaSimples, respostaEstruturada: respostaIA });
+      historicoSergio.push({ role: 'assistant', content: respostaIA.respostaSimples, respostaEstruturada: respostaIA, contextoPergunta: pergunta });
     } catch (_) {
       if (requestId !== sergioRequestId) return;
       historicoSergio.pop();
       const melhor = encontrarMelhorResposta(FAQ, pergunta);
       if (melhor) {
-        historicoSergio.push({ role: 'assistant', content: melhor.respostaSimples, respostaEstruturada: melhor });
+        historicoSergio.push({ role: 'assistant', content: melhor.respostaSimples, respostaEstruturada: melhor, contextoPergunta: pergunta });
       } else {
         historicoSergio.push({ role: 'assistant', content: 'Modo local: na versão Vercel eu também uso IA. Tente explicar com mais detalhes.', respostaEstruturada: {
           respostaSimples: 'Modo local: na versão Vercel eu também uso IA. Tente explicar com mais detalhes.',
           passoAPasso: ['Escreva o nome do aplicativo.', 'Diga o que apareceu na tela.', 'Se houver risco, pare e peça ajuda.'],
           atencao: 'Não compartilhe dados pessoais.',
           quandoPedirAjuda: 'Peça ajuda se houver risco de golpe ou pedido de dinheiro.'
-        } });
+        }, contextoPergunta: pergunta });
       }
     } finally {
       if (requestId === sergioRequestId) {
@@ -126,6 +128,13 @@ function initSergio() {
     localStorage.removeItem(STORAGE_SERGIO);
     renderChatSergio();
   });
+
+  document.querySelectorAll('[data-action="abrir-chat"]').forEach((btn) => btn.addEventListener('click', () => widgetApi.alternarWidget(true)));
+  document.querySelectorAll('[data-action="pergunta-rapida"]').forEach((btn) => btn.addEventListener('click', () => {
+    widgetApi.alternarWidget(true);
+    campo.value = btn.dataset.question || '';
+    campo.focus();
+  }));
 }
 
 async function carregarDados() {
@@ -136,9 +145,9 @@ async function carregarDados() {
 async function init() {
   await carregarDados();
   initNavegacao();
-  initCategorias();
-  initBusca();
-  initSergio();
+  initFaq();
+  const widgetApi = initWidgetSergio();
+  initSergio(widgetApi);
 }
 
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('service-worker.js'));
