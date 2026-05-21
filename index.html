@@ -19,54 +19,21 @@
 
   <main class="container">
     <section class="boas-vindas card">
-      <h2>Olá! Eu sou o Sérgio 👋</h2>
-      <p>Escolha uma opção para começar ou escreva sua dúvida.</p>
+      <h2>Olá, eu sou o Sérgio 👋</h2>
+      <p>Escolha uma opção para receber ajuda com celular, WhatsApp, Pix, golpes e dúvidas do dia a dia.</p>
     </section>
 
-    <section id="sergio-widget" class="sergio-widget" aria-label="Chat do Sérgio">
-      <header class="sergio-widget-header">
-        <h2><span class="avatar-fallback" aria-hidden="true">💬</span><img class="sergio-avatar hidden" alt="Avatar do Sérgio" /> Chat do Sérgio</h2>
-        <button id="btn-limpar-sergio" class="small-btn" type="button">Limpar conversa</button>
-      </header>
-
-      <div class="chat-paineis">
-        <details id="painel-assuntos" class="painel-opcoes">
-          <summary>☰ Escolher assunto</summary>
-          <div class="chips-wrap" id="chips-assuntos"></div>
-        </details>
-
-        <details id="painel-duvidas" class="painel-opcoes">
-          <summary>Dúvidas comuns</summary>
-          <div class="chips-wrap" id="chips-duvidas"></div>
-        </details>
+    <section class="home-acoes card" aria-label="Central de ajuda">
+      <div class="acoes-grid">
+        <button class="home-card" type="button" data-chat-action="open">💬 Falar com o Sérgio</button>
+        <button class="home-card" type="button" data-chat-question="Preciso de ajuda com meu celular.">📱 Ajuda com celular</button>
+        <button class="home-card" type="button" data-chat-question="Estou com dúvida no WhatsApp.">🟢 WhatsApp</button>
+        <button class="home-card" type="button" data-chat-question="Tenho uma dúvida sobre Pix ou banco e quero fazer com segurança.">💳 Banco e Pix com segurança</button>
+        <button class="home-card" type="button" data-chat-question="Acho que estou passando por um golpe. O que devo fazer?">🛡️ Estou com medo de golpe</button>
+        <button class="home-card" type="button" data-target="faq">❓ Dúvidas frequentes</button>
+        <button class="home-card" type="button" data-target="instalar">📲 Instalar no celular</button>
+        <a class="home-card" href="https://forms.gle/" target="_blank" rel="noopener noreferrer">⭐ Avaliar o sistema</a>
       </div>
-
-      <div id="chat-sergio" class="chat-sergio" aria-live="polite"></div>
-      <div class="chat-acoes">
-        <input id="pergunta-sergio" type="text" placeholder="Digite sua dúvida" />
-        <div class="chat-botoes">
-          <button id="btn-sergio" class="btn" type="button">Enviar</button>
-        </div>
-      </div>
-    </section>
-
-    <section class="card mais-opcoes">
-      <h3>Mais opções</h3>
-      <div class="mais-opcoes-links">
-        <button class="link-btn" data-target="faq" type="button">Categorias de dúvidas</button>
-        <button class="link-btn" data-target="seguranca" type="button">Modo Segurança</button>
-        <button class="link-btn" data-target="instalar" type="button">Como adicionar à tela inicial</button>
-        <a class="link-btn" href="https://forms.gle/" target="_blank" rel="noopener noreferrer">Avaliar o sistema</a>
-      </div>
-    </section>
-
-    <section id="seguranca" class="card hidden">
-      <h2>Modo Segurança</h2>
-      <ol>
-        <li><strong>PARE.</strong> Não clique em links.</li>
-        <li><strong>NÃO envie</strong> senha, CPF, código ou foto de documento.</li>
-        <li><strong>NÃO faça</strong> Pix, compra ou confirmação.</li>
-      </ol>
     </section>
 
     <section id="instalar" class="card hidden">
@@ -81,6 +48,40 @@
 
     <p id="sw-update-msg" class="sw-update-msg hidden">Atualizamos o sistema. Se algo parecer antigo, feche e abra novamente.</p>
   </main>
+
+  <button id="sergio-widget-toggle" class="sergio-widget-toggle" type="button" aria-expanded="false" aria-controls="sergio-widget">
+    <img src="assets/sergio-avatar.png" alt="Abrir chat do Sérgio" class="sergio-avatar" />
+  </button>
+
+  <section id="sergio-widget" class="sergio-widget hidden" aria-label="Chat do Sérgio">
+    <header class="sergio-widget-header">
+      <h2><span class="avatar-fallback" aria-hidden="true">💬</span><img class="sergio-avatar hidden" alt="Avatar do Sérgio" /> Chat do Sérgio</h2>
+      <div class="widget-header-actions">
+        <button id="btn-limpar-sergio" class="small-btn" type="button">Limpar</button>
+        <button id="btn-fechar-sergio" class="small-btn" type="button">Fechar</button>
+      </div>
+    </header>
+
+    <div class="chat-paineis">
+      <details id="painel-assuntos" class="painel-opcoes">
+        <summary>☰ Escolher assunto</summary>
+        <div class="chips-wrap" id="chips-assuntos"></div>
+      </details>
+
+      <details id="painel-duvidas" class="painel-opcoes">
+        <summary>Dúvidas comuns</summary>
+        <div class="chips-wrap" id="chips-duvidas"></div>
+      </details>
+    </div>
+
+    <div id="chat-sergio" class="chat-sergio" aria-live="polite"></div>
+    <div class="chat-acoes">
+      <input id="pergunta-sergio" type="text" placeholder="Digite sua dúvida" />
+      <div class="chat-botoes">
+        <button id="btn-sergio" class="btn" type="button">Enviar</button>
+      </div>
+    </div>
+  </section>
 
   <script src="js/search.js"></script>
   <script src="js/sergio.js"></script>

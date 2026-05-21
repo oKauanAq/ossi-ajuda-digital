@@ -5,19 +5,24 @@ body { margin:0; font-family:Arial,sans-serif; background:var(--fundo); color:va
 .logo { width:56px; border-radius:8px; }
 h1 { margin:0; font-size:1.4rem; color:var(--vinho); }
 .subtitulo { margin:4px 0 0; font-weight:700; }
-.container { padding:10px; max-width:900px; margin:0 auto 20px; }
-.card { background:#fff; border:2px solid #ddd; border-radius:14px; padding:14px; margin-top:12px; }
+.container { padding:14px; max-width:980px; margin:0 auto 20px; }
+.card { background:#fff; border:2px solid #ddd; border-radius:14px; padding:16px; margin-top:12px; }
 .hidden { display:none !important; }
 .btn { width:100%; background:var(--vinho); color:#fff; border:0; padding:14px; font-size:1.05rem; border-radius:12px; font-weight:700; }
-.sergio-widget { background:#fff; border:2px solid #d7d7d7; border-radius:16px; padding:10px; margin-top:12px; }
+.acoes-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.home-card { display:flex; align-items:center; justify-content:center; text-align:center; min-height:84px; padding:14px; border-radius:14px; border:2px solid #d2c2bc; background:#fff; color:#2a2a2a; text-decoration:none; font-size:1.05rem; font-weight:700; }
+.sergio-widget-toggle { position:fixed; right:20px; bottom:20px; width:66px; height:66px; border-radius:50%; border:0; background:#fff; box-shadow:0 10px 26px rgba(0,0,0,.25); padding:0; overflow:hidden; z-index:1000; }
+.sergio-widget-toggle .sergio-avatar { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+.sergio-widget { position:fixed; right:20px; bottom:96px; width:min(420px,calc(100vw - 24px)); max-height:78vh; overflow:auto; background:#fff; border:2px solid #d7d7d7; border-radius:16px; padding:10px; z-index:1000; box-shadow:0 16px 36px rgba(0,0,0,.2); }
 .sergio-widget-header { display:flex; justify-content:space-between; align-items:center; gap:10px; border-bottom:2px solid #eee; padding-bottom:8px; margin-bottom:8px; }
+.widget-header-actions{display:flex; gap:8px;}
 .sergio-widget-header h2 { margin:0; font-size:1.1rem; color:var(--vinho); display:flex; align-items:center; gap:8px; }
-.small-btn { background:var(--dourado); color:#000; border:0; padding:10px 12px; border-radius:10px; font-size:1rem; font-weight:700; }
+.small-btn { background:var(--dourado); color:#000; border:0; padding:8px 10px; border-radius:10px; font-size:.9rem; font-weight:700; }
 .chat-paineis { display:grid; gap:8px; margin-bottom:10px; }
 .painel-opcoes summary { list-style:none; cursor:pointer; background:var(--vinho); color:#fff; padding:12px; border-radius:10px; font-weight:700; }
 .painel-opcoes[open] summary { border-radius:10px 10px 0 0; }
 .painel-opcoes .chips-wrap { border:2px solid #ddd; border-top:0; padding:10px; border-radius:0 0 10px 10px; background:#fff; }
-.chat-sergio { background:#f8f8f8; border:2px solid #c9c9c9; border-radius:12px; min-height:280px; max-height:48vh; overflow-y:auto; padding:12px; margin-bottom:10px; }
+.chat-sergio { background:#f8f8f8; border:2px solid #c9c9c9; border-radius:12px; min-height:260px; max-height:42vh; overflow-y:auto; padding:12px; margin-bottom:10px; }
 .msg { display:flex; margin-bottom:12px; }
 .msg-user { justify-content:flex-end; }
 .msg-user p { background:#7b2d26; color:#fff; border-radius:16px 16px 4px 16px; padding:10px 12px; max-width:92%; margin:0; }
@@ -30,8 +35,5 @@ h1 { margin:0; font-size:1.4rem; color:var(--vinho); }
 .chip-sergio.secundario { border-color:#1d8f4e; }
 .sergio-avatar { width:34px; height:34px; border-radius:50%; object-fit:cover; }
 .sergio-msg-avatar { width:34px; height:34px; border-radius:50%; background:#fff3b7; display:flex; align-items:center; justify-content:center; }
-.mais-opcoes-links { display:flex; flex-wrap:wrap; gap:8px; }
-.link-btn { border:1px solid #bbb; border-radius:999px; background:#fff; padding:8px 12px; text-decoration:none; color:#222; font-size:.95rem; }
 .sw-update-msg { margin:12px 0; padding:10px; background:#fff3b7; border-radius:8px; }
-#sergio-widget-toggle,.btn-ouvir,.status-microfone,.privacidade-mic,.auto-enviar-wrap,#btn-sergio-mic,#btn-sergio-mic-test { display:none !important; }
-@media (max-width:720px){ body{font-size:21px;} .container{padding:8px;} .topo{padding:10px;} .chat-sergio{max-height:52vh;} .chip-sergio{width:100%; text-align:left;} .small-btn{font-size:.95rem;} }
+@media (max-width:720px){ body{font-size:21px;} .container{padding:10px;} .acoes-grid{grid-template-columns:1fr;} .home-card{min-height:76px;} .sergio-widget{right:10px; left:10px; width:auto; bottom:92px; max-height:82vh;} .chat-sergio{max-height:50vh;} }
