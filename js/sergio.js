@@ -1,6 +1,7 @@
 const termosSensiveis = [];
 
 const frasesVagas = [
+  'boa', 'bom dia', 'boa tarde', 'boa noite',
   'oi', 'olá', 'ola', 'tenho uma dúvida', 'tenho uma duvida', 'me ajuda', 'ajuda',
   'não sei mexer', 'nao sei mexer', 'queria perguntar uma coisa', 'dúvida', 'duvida',
   'ola gostaria de tirar uma duvida'
@@ -54,14 +55,14 @@ function ehPerguntaVaga(texto = '') {
 
 function respostaEsclarecimento() {
   return montarResposta({
-    respostaSimples: 'Claro. Me diga qual é a sua dúvida sobre celular, WhatsApp, internet, compras, banco, golpes ou aplicativos.',
+    respostaSimples: 'Boa! Eu sou o Sérgio. Me diga no que você precisa de ajuda.',
     passoAPasso: [
-      'Escreva em uma frase o que aconteceu.',
-      'Diga qual aplicativo ou função você estava usando.',
-      'Se apareceu aviso, copie o texto do aviso.'
+      'Escreva sua dúvida em uma frase simples.',
+      'Se for sobre celular, aplicativo, mensagem, golpe ou internet, explique o que apareceu na tela.',
+      'Se for uma dúvida do dia a dia, diga o que você quer fazer ou entender.'
     ],
-    atencao: 'Não compartilhe senha, código, CPF ou dados do cartão.',
-    quandoPedirAjuda: 'Se houver pedido de dinheiro, link suspeito ou medo de golpe.'
+    atencao: 'Não envie senha, código, CPF, cartão, documento ou dados bancários.',
+    quandoPedirAjuda: 'Se envolver dinheiro, link estranho, conta bloqueada, saúde ou medo de golpe, peça ajuda a alguém de confiança ou à equipe da OSSI.'
   });
 }
 
