@@ -12,39 +12,23 @@
   <header class="topo">
     <img src="assets/logo-ossi.jpg" alt="Logo da OSSI" class="logo" />
     <h1>OSSI Ajuda Digital</h1>
-    <p class="sub">Assistente: <strong>Sérgio</strong></p>
   </header>
 
   <main class="container">
-    <section class="acoes-principais">
-      <button class="btn" data-target="categorias">Categorias de dúvidas</button>
-      <button class="btn" data-target="busca">Buscar dúvida</button>
-      <button class="btn" data-target="sergio">Falar com o Sérgio</button>
-      <button class="btn destaque" data-target="seguranca">Modo Segurança</button>
-      <button class="btn" data-target="instalar">Como adicionar à tela inicial</button>
-      <a class="btn" href="https://forms.gle/" target="_blank" rel="noopener noreferrer">Avaliar o sistema</a>
+    <section class="boas-vindas card">
+      <h2>Olá, eu sou o Sérgio 👋</h2>
+      <p>Posso te ajudar com celular, WhatsApp, internet, golpes, Pix e dúvidas do dia a dia.</p>
     </section>
 
-    <section id="categorias" class="card hidden">
-      <h2>Categorias</h2>
-      <div id="lista-categorias" class="lista"></div>
-    </section>
-
-    <section id="busca" class="card hidden">
-      <h2>Busca simples</h2>
-      <input id="campo-busca" type="text" placeholder="Digite sua dúvida" />
-      <button id="btn-buscar" class="btn">Buscar</button>
-      <div id="resultado-busca"></div>
-    </section>
-
-    <section id="sergio" class="card hidden">
-      <h2>Assistente Sérgio</h2>
-      <div id="chat-sergio" class="chat-sergio" aria-live="polite"></div>
-      <div class="chat-acoes">
-        <input id="pergunta-sergio" type="text" placeholder="Ex.: Recebi link no WhatsApp" />
-        <button id="btn-sergio" class="btn">Enviar</button>
-      </div>
-      <button id="btn-limpar-sergio" class="small-btn" type="button">Limpar conversa</button>
+    <section class="atalhos" aria-label="Ações principais">
+      <button class="btn btn-atalho" data-action="abrir-chat">💬 Conversar com o Sérgio</button>
+      <button class="btn btn-atalho" data-target="seguranca">🛡️ Estou com medo de golpe</button>
+      <button class="btn btn-atalho" data-action="pergunta-rapida" data-question="Preciso de ajuda com o celular.">📱 Ajuda com celular</button>
+      <button class="btn btn-atalho" data-action="pergunta-rapida" data-question="Estou com dúvida no WhatsApp.">🟢 WhatsApp</button>
+      <button class="btn btn-atalho" data-target="seguranca" data-action="pergunta-rapida" data-question="Recebi pedido de Pix e quero confirmar se é seguro.">💳 Banco e Pix com segurança</button>
+      <button class="btn btn-atalho" data-target="faq">❓ Dúvidas frequentes</button>
+      <button class="btn btn-atalho" data-target="instalar">📲 Instalar no celular</button>
+      <a class="btn btn-atalho" href="https://forms.gle/" target="_blank" rel="noopener noreferrer">⭐ Avaliar o sistema</a>
     </section>
 
     <section id="seguranca" class="card hidden">
@@ -67,10 +51,29 @@
     </section>
 
     <section id="faq" class="card hidden">
-      <h2 id="faq-titulo">Dúvidas</h2>
+      <h2 id="faq-titulo">Dúvidas frequentes</h2>
       <div id="faq-lista"></div>
     </section>
   </main>
+
+  <button id="sergio-widget-toggle" class="sergio-widget-toggle" type="button" title="Falar com Sérgio" aria-label="Falar com Sérgio">💬</button>
+
+  <section id="sergio-widget" class="sergio-widget hidden" aria-label="Chat do Sérgio">
+    <header class="sergio-widget-header">
+      <h2>Sérgio — Ajuda Digital</h2>
+      <button id="sergio-widget-close" class="small-btn" type="button" aria-label="Fechar chat">Fechar ✕</button>
+    </header>
+    <div id="chat-sergio" class="chat-sergio" aria-live="polite"></div>
+    <p id="status-microfone" class="status-microfone hidden">Estou ouvindo...</p>
+    <div class="chat-acoes">
+      <input id="pergunta-sergio" type="text" placeholder="Digite sua dúvida" />
+      <div class="chat-botoes">
+        <button id="btn-sergio-mic" class="btn" type="button">🎙️ Falar</button>
+        <button id="btn-sergio" class="btn" type="button">Enviar</button>
+      </div>
+    </div>
+    <button id="btn-limpar-sergio" class="small-btn" type="button">Limpar conversa</button>
+  </section>
 
   <script src="js/tts.js"></script>
   <script src="js/search.js"></script>
