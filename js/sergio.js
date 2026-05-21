@@ -71,15 +71,15 @@ function detectarApoioVisual(resposta = '', pergunta = '', tipo = '') {
 function montarResposta(item, pergunta = '') {
   const limpo = sanitizarResposta(item);
   const apoio = detectarApoioVisual(limpo.respostaSimples, pergunta, item.categoria || '');
-  const passosHtml = limpo.passoAPasso.map((p, i) => `<li><span class="passo-numero">${i + 1}</span><span>${escaparHtml(p)}</span></li>`).join('');
-  const texto = `Resposta simples: ${limpo.respostaSimples}\nPasso a passo: ${limpo.passoAPasso.join(' ')}\nAtenção: ${limpo.atencao}\nQuando pedir ajuda: ${limpo.quandoPedirAjuda}`;
+  const passosHtml = limpo.passoAPasso.length ? limpo.passoAPasso.map((p, i) => `<li><span class="passo-numero">${i + 1}</span><span>${escaparHtml(p)}</span></li>`).join('') : '';
+  const texto = `Resposta simples: ${limpo.respostaSimples}\n${limpo.passoAPasso.length ? `Passo a passo: ${limpo.passoAPasso.join(' ')}\n` : ''}${limpo.atencao ? `Atenção: ${limpo.atencao}\n` : ''}${limpo.quandoPedirAjuda ? `Quando pedir ajuda: ${limpo.quandoPedirAjuda}` : ''}`.trim();
   return {
     html: `<div class="bloco-sergio">
       ${apoio ? `<div class="apoio-visual" data-asset-path="assets/guias/"><strong>${apoio.emoji}</strong><span>${escaparHtml(apoio.titulo)}</span></div>` : ''}
       <p class="resposta-destaque">${escaparHtml(limpo.respostaSimples)}</p>
-      <ol class="passos-sergio">${passosHtml}</ol>
-      <p class="caixa-atencao"><strong>Atenção:</strong> ${escaparHtml(limpo.atencao)}</p>
-      <p class="caixa-ajuda"><strong>Quando pedir ajuda:</strong> ${escaparHtml(limpo.quandoPedirAjuda)}</p>
+      ${passosHtml ? `<ol class="passos-sergio">${passosHtml}</ol>` : ""}
+      ${limpo.atencao ? `<p class="caixa-atencao"><strong>Atenção:</strong> ${escaparHtml(limpo.atencao)}</p>` : ""}
+      ${limpo.quandoPedirAjuda ? `<p class="caixa-ajuda"><strong>Quando pedir ajuda:</strong> ${escaparHtml(limpo.quandoPedirAjuda)}</p>` : ""}
       <button class="small-btn btn-ouvir" onclick='ouvirTexto(${JSON.stringify(escaparHtml(texto))})'>🔊 Ouvir resposta</button>
     </div>`,
     texto
@@ -89,16 +89,31 @@ function montarResposta(item, pergunta = '') {
 function initMicrofone(inputEl) {
   const btnMic = document.getElementById('btn-sergio-mic');
   const status = document.getElementById('status-microfone');
+  const btnTesteMic = document.getElementById('btn-sergio-mic-test');
   const autoEnviar = document.getElementById('sergio-auto-enviar');
   const btnEnviar = document.getElementById('btn-sergio');
   const Reconhecimento = window.SpeechRecognition || window.webkitSpeechRecognition;
   const temMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
   const ambienteSeguro = window.isSecureContext || ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
-  if (!Reconhecimento || !temMedia || !ambienteSeguro) {
-    btnMic.classList.add('hidden');
+  
+  btnTesteMic?.addEventListener('click', async () => {
     status.classList.remove('hidden');
-    status.textContent = 'Microfone não disponível neste navegador. Use Google Chrome ou digite sua pergunta.';
+    status.textContent = `Diagnóstico: navegador ${Reconhecimento ? 'compatível' : 'incompatível'}, contexto ${ambienteSeguro ? 'seguro' : 'não seguro'}.`;
+    if (!Reconhecimento || !temMedia || !ambienteSeguro) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((t) => t.stop());
+      status.textContent = 'Diagnóstico: microfone disponível e permissão concedida. Clique em “🎙️ Falar”.';
+    } catch (error) {
+      status.textContent = error?.name === 'NotAllowedError'
+        ? 'Permissão negada. Clique no cadeado do site para permitir o microfone.'
+        : 'Não consegui validar o microfone. Tente Google Chrome/Edge ou digite sua pergunta.';
+    }
+  });
+if (!Reconhecimento || !temMedia || !ambienteSeguro) {
+    status.classList.remove('hidden');
+    status.textContent = 'Neste navegador, falar pelo microfone pode não funcionar. Use Google Chrome ou digite.';
     return;
   }
 
@@ -111,7 +126,7 @@ function initMicrofone(inputEl) {
   reconhecimento.onstart = () => {
     btnMic.textContent = '🎙️ Ouvindo...';
     status.classList.remove('hidden');
-    status.textContent = 'Estou ouvindo. Pode falar agora.';
+    status.textContent = 'Reconhecimento iniciado. Estou ouvindo, pode falar agora.';
   };
 
   btnMic.addEventListener('click', async () => {
@@ -127,14 +142,14 @@ function initMicrofone(inputEl) {
       } else if (error?.name === 'NotFoundError') {
         status.textContent = 'Nenhum microfone foi encontrado.';
       } else {
-        status.textContent = 'Não consegui acessar o microfone. Tente digitar sua pergunta.';
+        status.textContent = 'Não consegui acessar o microfone. Tente usar Google Chrome ou Edge. Você também pode digitar sua pergunta.';
       }
     }
   });
 
   reconhecimento.onresult = (event) => {
     const texto = event.results?.[0]?.[0]?.transcript?.trim();
-    if (!texto) return;
+    if (!texto) { status.textContent = 'Não reconheci sua fala. Tente novamente ou digite sua pergunta.'; return; }
     inputEl.value = texto;
     inputEl.focus();
     if (autoEnviar?.checked) {
@@ -147,6 +162,7 @@ function initMicrofone(inputEl) {
 
   reconhecimento.onend = () => {
     resetBotao();
+    if (!status.textContent.includes('reconhecido')) status.textContent = 'Reconhecimento finalizado.';
   };
 
   reconhecimento.onerror = (event) => {
@@ -156,6 +172,6 @@ function initMicrofone(inputEl) {
       status.textContent = 'Permissão negada. Clique no cadeado do site e permita o microfone.';
       return;
     }
-    status.textContent = 'Não consegui acessar o microfone. Tente digitar sua pergunta.';
+    status.textContent = 'Não consegui acessar o microfone. Tente usar Google Chrome ou Edge. Você também pode digitar sua pergunta.';
   };
 }
