@@ -1,7 +1,4 @@
-const termosSensiveis = [
-  'pix', 'banco', 'senha', 'cpf', 'cartão', 'cartao', 'codigo', 'código', 'documento',
-  'saúde', 'saude', 'golpe', 'link', 'desconhecido', 'compra', 'dinheiro', 'cartao'
-];
+const termosSensiveis = [];
 
 const frasesVagas = [
   'oi', 'olá', 'ola', 'tenho uma dúvida', 'tenho uma duvida', 'me ajuda', 'ajuda',
@@ -82,15 +79,6 @@ function montarResposta(item) {
     </div>`,
     texto
   };
-}
-
-function respostaPadraoSegura() {
-  return montarResposta({
-    respostaSimples: 'Vamos com calma. Não faça nenhuma ação agora.',
-    passoAPasso: ['Não clique em links.', 'Não envie dados pessoais.', 'Não faça Pix nem pagamentos.', 'Peça ajuda de alguém de confiança.'],
-    atencao: 'Este sistema não acessa banco, gov.br ou compras.',
-    quandoPedirAjuda: 'Se houver dinheiro, senha, CPF, código, documento ou medo de golpe.'
-  });
 }
 
 function pontuacaoFaq(item, texto) {
