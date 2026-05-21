@@ -80,7 +80,6 @@ function montarResposta(item, pergunta = '') {
       ${passosHtml ? `<ol class="passos-sergio">${passosHtml}</ol>` : ""}
       ${limpo.atencao ? `<p class="caixa-atencao"><strong>Atenção:</strong> ${escaparHtml(limpo.atencao)}</p>` : ""}
       ${limpo.quandoPedirAjuda ? `<p class="caixa-ajuda"><strong>Quando pedir ajuda:</strong> ${escaparHtml(limpo.quandoPedirAjuda)}</p>` : ""}
-      <button class="small-btn btn-ouvir" onclick='ouvirTexto(${JSON.stringify(escaparHtml(texto))})'>🔊 Ouvir resposta</button>
     </div>`,
     texto
   };
