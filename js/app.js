@@ -1,5 +1,6 @@
 let FAQ = [];
 let CATEGORIAS = [];
+let sergioRequestId = 0;
 
 function mostrar(secaoId) {
   document.querySelectorAll('.card').forEach(el => el.classList.add('hidden'));
@@ -40,34 +41,62 @@ function initBusca() {
 }
 
 function initSergio() {
-  document.getElementById('btn-sergio').addEventListener('click', async () => {
-    const pergunta = document.getElementById('pergunta-sergio').value.trim();
-    const saida = document.getElementById('resposta-sergio');
+  const botaoSergio = document.getElementById('btn-sergio');
+  const campoPergunta = document.getElementById('pergunta-sergio');
+  const saida = document.getElementById('resposta-sergio');
+
+  const enviarPergunta = async () => {
+    const pergunta = campoPergunta.value.trim();
     if (!pergunta) return;
-    if (ehPerguntaVaga(pergunta)) {
-      saida.innerHTML = respostaEsclarecimento().html;
-      return;
-    }
+
+    const requestId = ++sergioRequestId;
+    saida.innerHTML = '<p>Estou pensando...</p>';
+    botaoSergio.disabled = true;
+    botaoSergio.textContent = 'Sérgio está pensando...';
 
     const melhor = encontrarMelhorResposta(FAQ, pergunta);
 
-    if (deveBloquearIA(pergunta) || ehSensivel(pergunta)) {
-      const alerta = '<p><strong>Segurança:</strong> Esse tema é sensível. Não compartilhe dados pessoais. Peça ajuda de alguém de confiança.</p>';
-      saida.innerHTML = alerta + respostaPadraoSegura().html;
-      return;
-    }
-
-    saida.innerHTML = '<p>Estou pensando...</p>';
     try {
+      if (ehPerguntaVaga(pergunta)) {
+        if (requestId === sergioRequestId) {
+          saida.innerHTML = respostaEsclarecimento().html;
+        }
+        return;
+      }
+
+      if (deveBloquearIA(pergunta) || ehSensivel(pergunta)) {
+        const alerta = '<p><strong>Segurança:</strong> Esse tema é sensível. Não compartilhe dados pessoais. Peça ajuda de alguém de confiança.</p>';
+        if (requestId === sergioRequestId) {
+          saida.innerHTML = alerta + respostaPadraoSegura().html;
+        }
+        return;
+      }
+
       const respostaIA = await perguntarIA(pergunta);
-      saida.innerHTML = montarResposta(respostaIA).html;
+      if (requestId === sergioRequestId) {
+        saida.innerHTML = montarResposta(respostaIA).html;
+      }
     } catch (_) {
+      if (requestId !== sergioRequestId) return;
+
       if (melhor) {
         saida.innerHTML = '<p>Vou responder com minha biblioteca segura de dúvidas.</p>' + montarResposta(melhor).html;
       } else {
         saida.innerHTML = '<p>Não consegui responder agora. Tente escrever de outro jeito, por exemplo: "como mandar mensagem no Facebook".</p>';
       }
+    } finally {
+      if (requestId === sergioRequestId) {
+        botaoSergio.disabled = false;
+        botaoSergio.textContent = 'Perguntar ao Sérgio';
+      }
     }
+  };
+
+  botaoSergio.addEventListener('click', enviarPergunta);
+  campoPergunta.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    enviarPergunta();
   });
 }
 
