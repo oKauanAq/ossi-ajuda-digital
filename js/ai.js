@@ -25,6 +25,10 @@ async function perguntarIA(pergunta, timeoutMs = 8000) {
     }
 
     const dados = await resposta.json();
+    if (dados?.fallback === true) {
+      throw new Error('Backend solicitou fallback local');
+    }
+
     const r = dados?.resposta;
     if (!r || !r.respostaSimples || !Array.isArray(r.passoAPasso) || !r.atencao || !r.quandoPedirAjuda) {
       throw new Error('Resposta inválida da IA');
