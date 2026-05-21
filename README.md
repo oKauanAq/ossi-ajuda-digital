@@ -47,7 +47,8 @@ PWA estática para apoiar idosos da Obra Social Santa Isabel (OSSI) com dúvidas
 ### Como configurar na Vercel
 1. Importar o repositório na Vercel.
 2. Em **Settings > Environment Variables**, criar `NVIDIA_API_KEY`.
-3. Fazer deploy.
+3. Opcional: criar `NVIDIA_MODEL` para trocar o modelo sem alterar código. Se não configurar, o projeto usa o modelo padrão atual.
+4. Fazer deploy.
 
 ### Segurança
 - A chave fica somente no backend (`process.env.NVIDIA_API_KEY`).
