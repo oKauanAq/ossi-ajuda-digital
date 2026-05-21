@@ -54,35 +54,18 @@ function initSergio() {
     botaoSergio.disabled = true;
     botaoSergio.textContent = 'Sérgio está pensando...';
 
-    const melhor = encontrarMelhorResposta(FAQ, pergunta);
-
     try {
-      if (ehPerguntaVaga(pergunta)) {
-        if (requestId === sergioRequestId) {
-          saida.innerHTML = respostaEsclarecimento().html;
-        }
-        return;
-      }
-
-      if (deveBloquearIA(pergunta) || ehSensivel(pergunta)) {
-        const alerta = '<p><strong>Segurança:</strong> Esse tema é sensível. Não compartilhe dados pessoais. Peça ajuda de alguém de confiança.</p>';
-        if (requestId === sergioRequestId) {
-          saida.innerHTML = alerta + respostaPadraoSegura().html;
-        }
-        return;
-      }
-
       const respostaIA = await perguntarIA(pergunta);
       if (requestId === sergioRequestId) {
         saida.innerHTML = montarResposta(respostaIA).html;
       }
     } catch (_) {
       if (requestId !== sergioRequestId) return;
-
+      const melhor = encontrarMelhorResposta(FAQ, pergunta);
       if (melhor) {
-        saida.innerHTML = '<p>Vou responder com minha biblioteca segura de dúvidas.</p>' + montarResposta(melhor).html;
+        saida.innerHTML = '<p>Modo local: na versão Vercel eu também uso IA. Aqui vou usar minha biblioteca de apoio.</p>' + montarResposta(melhor).html;
       } else {
-        saida.innerHTML = '<p>Não consegui responder agora. Tente escrever de outro jeito, por exemplo: "como mandar mensagem no Facebook".</p>';
+        saida.innerHTML = '<p>Modo local: na versão Vercel eu também uso IA. Tente explicar com mais detalhes.</p>';
       }
     } finally {
       if (requestId === sergioRequestId) {
