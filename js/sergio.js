@@ -1,8 +1,51 @@
-const termosSensiveis = ['pix','banco','senha','cpf','cartão','codigo','código','documento','saúde','golpe','link','desconhecido','compra','dinheiro'];
+const termosSensiveis = [
+  'pix', 'banco', 'senha', 'cpf', 'cartão', 'cartao', 'codigo', 'código', 'documento',
+  'saúde', 'saude', 'golpe', 'link', 'desconhecido', 'compra', 'dinheiro', 'cartao'
+];
 
-function ehSensivel(texto='') {
-  const t = texto.toLowerCase();
-  return termosSensiveis.some(k => t.includes(k));
+const termosVagos = [
+  'oi', 'olá', 'ola', 'tenho uma dúvida', 'tenho uma duvida', 'me ajuda', 'ajuda',
+  'não sei mexer', 'nao sei mexer', 'queria perguntar uma coisa', 'dúvida', 'duvida'
+];
+
+const termosGenericos = new Set([
+  'duvida', 'dúvida', 'ajuda', 'celular', 'aplicativo', 'app', 'whatsapp', 'internet',
+  'coisa', 'mexer', 'ola', 'olá', 'oi', 'tenho', 'queria', 'perguntar', 'sobre'
+]);
+
+function normalizarTexto(texto = '') {
+  return texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+function ehSensivel(texto = '') {
+  const t = normalizarTexto(texto);
+  return termosSensiveis.some((k) => t.includes(normalizarTexto(k)));
+}
+
+function ehPerguntaVaga(texto = '') {
+  const t = normalizarTexto(texto);
+  if (!t || t.length < 6) return true;
+  if (termosVagos.some((item) => t === normalizarTexto(item) || t.includes(normalizarTexto(item)))) return true;
+  const tokens = t.split(/\s+/).filter(Boolean);
+  const especificos = tokens.filter((tok) => tok.length > 2 && !termosGenericos.has(tok));
+  return especificos.length === 0;
+}
+
+function respostaEsclarecimento() {
+  return montarResposta({
+    respostaSimples: 'Claro. Me diga qual é a sua dúvida sobre celular, WhatsApp, internet, compras, banco, golpes ou aplicativos.',
+    passoAPasso: [
+      'Escreva em uma frase o que aconteceu.',
+      'Diga qual aplicativo ou função você estava usando.',
+      'Se apareceu aviso, copie o texto do aviso.'
+    ],
+    atencao: 'Não compartilhe senha, código, CPF ou dados do cartão.',
+    quandoPedirAjuda: 'Se houver pedido de dinheiro, link suspeito ou medo de golpe.'
+  });
 }
 
 function montarResposta(item) {
@@ -31,28 +74,30 @@ function respostaPadraoSegura() {
 }
 
 function pontuacaoFaq(item, texto) {
-  const t = texto.toLowerCase();
-  const termosGenericos = new Set(['whatsapp', 'celular', 'aplicativo', 'app']);
+  const t = normalizarTexto(texto);
+  const tokens = t.split(/\s+/).map((termo) => termo.replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean);
+  const relevantes = tokens.filter((termo) => termo.length > 2 && !termosGenericos.has(termo));
+  if (relevantes.length === 0) return -10;
+
   let pontos = 0;
-  if (item.categoria.toLowerCase().includes(t) || t.includes(item.categoria.toLowerCase())) pontos += 4;
-  if (item.pergunta.toLowerCase().includes(t) || t.includes(item.pergunta.toLowerCase())) pontos += 5;
-  for (const k of (item.palavrasChave || [])) {
-    if (t.includes(k.toLowerCase())) pontos += 3;
+  const perguntaFaq = normalizarTexto(item.pergunta || '');
+  const categoriaFaq = normalizarTexto(item.categoria || '');
+  const palavrasFaq = (item.palavrasChave || []).map((k) => normalizarTexto(k));
+
+  for (const termo of relevantes) {
+    if (perguntaFaq.includes(termo)) pontos += 3;
+    if (categoriaFaq.includes(termo)) pontos += 2;
+    if (palavrasFaq.some((k) => k.includes(termo) || termo.includes(k))) pontos += 4;
   }
-  for (const termo of t.split(/\s+/)) {
-    if (termo.length > 2 && !termosGenericos.has(termo) && item.pergunta.toLowerCase().includes(termo)) pontos += 1;
-  }
-  const termosRelevantes = t
-    .split(/\s+/)
-    .map((termo) => termo.replace(/[^\p{L}\p{N}]/gu, ''))
-    .filter((termo) => termo.length > 2 && !termosGenericos.has(termo));
-  if (termosRelevantes.length === 0) pontos -= 8;
+
+  if (perguntaFaq.includes(t) || t.includes(perguntaFaq)) pontos += 4;
+
   return pontos;
 }
 
 function encontrarMelhorResposta(faq, pergunta) {
   let melhor = null;
-  let max = 0;
+  let max = -999;
   for (const item of faq) {
     const pontos = pontuacaoFaq(item, pergunta);
     if (pontos > max) {
@@ -60,5 +105,5 @@ function encontrarMelhorResposta(faq, pergunta) {
       melhor = item;
     }
   }
-  return max >= 6 ? melhor : null;
+  return max >= 8 ? melhor : null;
 }

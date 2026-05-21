@@ -44,20 +44,29 @@ function initSergio() {
     const pergunta = document.getElementById('pergunta-sergio').value.trim();
     const saida = document.getElementById('resposta-sergio');
     if (!pergunta) return;
-    const melhor = encontrarMelhorResposta(FAQ, pergunta);
-    const respostaLocal = melhor ? montarResposta(melhor) : respostaPadraoSegura();
-
-    if (deveBloquearIA(pergunta) || ehSensivel(pergunta)) {
-      const alerta = '<p><strong>Segurança:</strong> Esse tema é sensível. Não compartilhe dados pessoais. Peça ajuda de alguém de confiança.</p>';
-      saida.innerHTML = alerta + respostaLocal.html;
+    if (ehPerguntaVaga(pergunta)) {
+      saida.innerHTML = respostaEsclarecimento().html;
       return;
     }
 
+    const melhor = encontrarMelhorResposta(FAQ, pergunta);
+
+    if (deveBloquearIA(pergunta) || ehSensivel(pergunta)) {
+      const alerta = '<p><strong>Segurança:</strong> Esse tema é sensível. Não compartilhe dados pessoais. Peça ajuda de alguém de confiança.</p>';
+      saida.innerHTML = alerta + respostaPadraoSegura().html;
+      return;
+    }
+
+    saida.innerHTML = '<p>Estou pensando...</p>';
     try {
       const respostaIA = await perguntarIA(pergunta);
       saida.innerHTML = montarResposta(respostaIA).html;
     } catch (_) {
-      saida.innerHTML = respostaLocal.html;
+      if (melhor) {
+        saida.innerHTML = '<p>Vou responder com minha biblioteca segura de dúvidas.</p>' + montarResposta(melhor).html;
+      } else {
+        saida.innerHTML = respostaEsclarecimento().html;
+      }
     }
   });
 }

@@ -1,146 +1,85 @@
+import fs from 'fs';
+import path from 'path';
+
 const termosSensiveis = [
   'senha', 'cpf', 'cartão', 'cartao', 'código', 'codigo', 'token', 'documento',
-  'saúde', 'saude', 'pix', 'banco', 'dinheiro', 'compra', 'golpe',
+  'saúde', 'saude', 'pix', 'banco', 'dinheiro', 'compra', 'golpe', 'link',
   'número desconhecido', 'numero desconhecido'
 ];
 
+const termosGenericos = new Set(['duvida', 'ajuda', 'celular', 'aplicativo', 'app', 'whatsapp', 'internet', 'coisa', 'mexer']);
+
+function normalizarTexto(texto = '') {
+  return texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+}
+
 function contemConteudoSensivel(texto = '') {
-  const t = texto.toLowerCase();
-  if (termosSensiveis.some((termo) => t.includes(termo))) return true;
-  if (/link\s+suspeito/.test(t)) return true;
-  return false;
+  const t = normalizarTexto(texto);
+  return termosSensiveis.some((termo) => t.includes(normalizarTexto(termo)));
 }
 
-function respostaSeguraLocal() {
-  return {
-    respostaSimples: 'Vamos com calma. Não faça nenhuma ação agora.',
-    passoAPasso: [
-      'Não clique em links ou botões suspeitos.',
-      'Não informe senha, código, token, CPF ou dados de cartão.',
-      'Não faça Pix, compra ou transferência.',
-      'Peça ajuda de alguém de confiança ou da equipe da OSSI.'
-    ],
-    atencao: 'Este sistema não acessa banco, gov.br nem compras.',
-    quandoPedirAjuda: 'Sempre que houver dúvida sobre segurança, dinheiro ou possível golpe.'
-  };
+function perguntaVaga(texto = '') {
+  const t = normalizarTexto(texto);
+  if (!t || t.length < 6) return true;
+  const tokens = t.split(/\s+/).filter(Boolean);
+  const especificos = tokens.filter((tok) => tok.length > 2 && !termosGenericos.has(tok));
+  return especificos.length === 0;
 }
 
-function extrairCampo(texto, inicio, fimOpcional) {
-  const inicioRegex = new RegExp(`${inicio}\\s*:\\s*([\\s\\S]*?)${fimOpcional ? `(?=\\n${fimOpcional}\\s*:)` : '$'}`, 'i');
-  const match = texto.match(inicioRegex);
-  return match?.[1]?.trim() || '';
+function respostaSeguraLocal() { return { respostaSimples: 'Vamos com calma. Não faça nenhuma ação agora.', passoAPasso: ['Não clique em links ou botões suspeitos.', 'Não informe senha, código, token, CPF ou dados de cartão.', 'Não faça Pix, compra ou transferência.', 'Peça ajuda de alguém de confiança ou da equipe da OSSI.'], atencao: 'Este sistema não acessa banco, gov.br nem compras.', quandoPedirAjuda: 'Sempre que houver dúvida sobre segurança, dinheiro ou possível golpe.' }; }
+function respostaEsclarecimento() { return { respostaSimples: 'Claro. Me diga qual é a sua dúvida sobre celular, WhatsApp, internet, compras, banco, golpes ou aplicativos.', passoAPasso: ['Escreva o que aconteceu em uma frase.', 'Diga qual aplicativo você estava usando.', 'Se apareceu aviso, copie o texto do aviso.'], atencao: 'Nunca compartilhe senha, código, CPF ou dados do cartão.', quandoPedirAjuda: 'Se houver pedido de dinheiro, link suspeito ou medo de golpe.' }; }
+
+function carregarFaq() {
+  const faqPath = path.join(process.cwd(), 'data', 'faq.json');
+  return JSON.parse(fs.readFileSync(faqPath, 'utf8'));
 }
 
-function estruturarRespostaIA(texto = '') {
-  const textoSemMarkdown = texto
-    .replace(/```json/gi, '')
-    .replace(/```/g, '')
-    .trim();
-  const primeiroAbre = textoSemMarkdown.indexOf('{');
-  const ultimoFecha = textoSemMarkdown.lastIndexOf('}');
-  const trechoJson = (primeiroAbre !== -1 && ultimoFecha !== -1 && ultimoFecha > primeiroAbre)
-    ? textoSemMarkdown.slice(primeiroAbre, ultimoFecha + 1).trim()
-    : textoSemMarkdown;
-
-  try {
-    const parsed = JSON.parse(trechoJson);
-    const resposta = {
-      respostaSimples: String(parsed?.respostaSimples || '').trim(),
-      passoAPasso: Array.isArray(parsed?.passoAPasso) ? parsed.passoAPasso.map((p) => String(p).trim()).filter(Boolean) : [],
-      atencao: String(parsed?.atencao || '').trim(),
-      quandoPedirAjuda: String(parsed?.quandoPedirAjuda || '').trim()
-    };
-    if (resposta.respostaSimples && resposta.passoAPasso.length && resposta.atencao && resposta.quandoPedirAjuda) {
-      return resposta;
-    }
-  } catch (_) {
-    // fallback por extração textual abaixo
-  }
-
-  const respostaSimples = extrairCampo(texto, 'Resposta simples', 'Passo a passo');
-  const blocoPassos = extrairCampo(texto, 'Passo a passo', 'Atenção');
-  const atencao = extrairCampo(texto, 'Atenção', 'Quando pedir ajuda');
-  const quandoPedirAjuda = extrairCampo(texto, 'Quando pedir ajuda');
-
-  const passoAPasso = blocoPassos
-    .split('\n')
-    .map((linha) => linha.replace(/^[-\d.)\s]+/, '').trim())
-    .filter(Boolean);
-
-  if (!respostaSimples || !passoAPasso.length || !atencao || !quandoPedirAjuda) {
-    return null;
-  }
-
-  return { respostaSimples, passoAPasso, atencao, quandoPedirAjuda };
+function pontuar(item, pergunta) {
+  const q = normalizarTexto(pergunta);
+  const termos = q.split(/\s+/).map((t) => t.replace(/[^\p{L}\p{N}]/gu, '')).filter((t) => t.length > 2 && !termosGenericos.has(t));
+  if (!termos.length) return -10;
+  const texto = normalizarTexto(`${item.categoria} ${item.pergunta} ${(item.palavrasChave || []).join(' ')}`);
+  return termos.reduce((acc, termo) => acc + (texto.includes(termo) ? 3 : 0), 0);
 }
+
+function selecionarContextoFaq(faq, pergunta) {
+  return faq
+    .map((item) => ({ item, score: pontuar(item, pergunta) }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6)
+    .slice(0, Math.max(3, Math.min(6, faq.length)))
+    .map((x) => ({ categoria: x.item.categoria, pergunta: x.item.pergunta, respostaSimples: x.item.respostaSimples, passoAPasso: x.item.passoAPasso, atencao: x.item.atencao, quandoPedirAjuda: x.item.quandoPedirAjuda }));
+}
+
+function estruturarRespostaIA(texto = '') { try { const parsed = JSON.parse(texto.replace(/```json/gi, '').replace(/```/g, '').trim()); if (parsed?.respostaSimples && Array.isArray(parsed?.passoAPasso) && parsed?.atencao && parsed?.quandoPedirAjuda) return parsed; } catch (_) {} return null; }
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Método não permitido.' });
-  }
-
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
   const { pergunta } = req.body || {};
-  if (!pergunta || typeof pergunta !== 'string') {
-    return res.status(400).json({ error: 'Pergunta inválida.' });
-  }
+  if (!pergunta || typeof pergunta !== 'string') return res.status(400).json({ error: 'Pergunta inválida.' });
 
-  if (contemConteudoSensivel(pergunta)) {
-    return res.status(200).json({ seguro: true, resposta: respostaSeguraLocal() });
-  }
-
-  if (!process.env.NVIDIA_API_KEY) {
-    return res.status(503).json({ error: 'Modo IA indisponível.' });
-  }
+  if (perguntaVaga(pergunta)) return res.status(200).json({ esclarecimento: true, resposta: respostaEsclarecimento() });
+  if (contemConteudoSensivel(pergunta)) return res.status(200).json({ seguro: true, resposta: respostaSeguraLocal() });
+  if (!process.env.NVIDIA_API_KEY) return res.status(200).json({ fallback: true });
 
   try {
+    const contextoFaq = selecionarContextoFaq(carregarFaq(), pergunta);
     const resposta = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
+      method: 'POST', headers: { Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
-        temperature: 0.2,
-        max_tokens: 600,
-        extra_body: {
-          chat_template_kwargs: {
-            enable_thinking: false
-          }
-        },
+        model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', temperature: 0.2, max_tokens: 600,
+        extra_body: { chat_template_kwargs: { enable_thinking: false } },
         messages: [
-          {
-            role: 'system',
-            content: `Você é o assistente Sérgio para idosos. Responda em português claro e simples.
-Responda apenas com JSON válido e puro.
-Não escreva explicações antes ou depois do JSON.
-Não use markdown e não use blocos \`\`\`json.
-Use exatamente este formato:
-{
-  "respostaSimples": "texto curto",
-  "passoAPasso": ["passo 1", "passo 2", "passo 3"],
-  "atencao": "alerta curto",
-  "quandoPedirAjuda": "quando pedir ajuda"
-}
-No campo passoAPasso, escreva de 3 a 5 passos curtos.`
-          },
-          { role: 'user', content: pergunta }
+          { role: 'system', content: 'Você é o assistente Sérgio para idosos. Linguagem simples, curta e acolhedora. Use apenas o contexto da biblioteca interna como base principal. Nunca peça senha, CPF, cartão, código, documento ou dados de saúde. Se não houver resposta exata no contexto, dê orientação geral segura. Responda APENAS com JSON válido no formato: {"respostaSimples":"","passoAPasso":[""],"atencao":"","quandoPedirAjuda":""}.' },
+          { role: 'user', content: `Pergunta do usuário: ${pergunta}\n\nContexto da biblioteca interna (FAQ): ${JSON.stringify(contextoFaq)}` }
         ]
       })
     });
-
-    if (!resposta.ok) {
-      return res.status(200).json({ fallback: true });
-    }
-
+    if (!resposta.ok) return res.status(200).json({ fallback: true });
     const dados = await resposta.json();
-    const texto = dados?.choices?.[0]?.message?.content?.trim();
-    const estruturada = estruturarRespostaIA(texto || '');
-
+    const estruturada = estruturarRespostaIA(dados?.choices?.[0]?.message?.content || '');
     if (!estruturada) return res.status(200).json({ fallback: true });
-
     return res.status(200).json({ resposta: estruturada });
-  } catch (_) {
-    return res.status(200).json({ fallback: true });
-  }
+  } catch (_) { return res.status(200).json({ fallback: true }); }
 }
