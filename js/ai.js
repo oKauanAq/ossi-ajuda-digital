@@ -9,9 +9,9 @@ function normalizarRespostaIA(payload = {}) {
     tipo: payload?.tipo || 'fallback',
     origem: payload?.origem || 'local',
     respostaSimples: limparTexto(r.respostaSimples || 'Vamos resolver isso com calma.'),
-    passoAPasso: passos.length ? passos : ['Siga com calma e peça ajuda se precisar.'],
-    atencao: limparTexto(r.atencao || 'Não compartilhe dados pessoais.'),
-    quandoPedirAjuda: limparTexto(r.quandoPedirAjuda || 'Peça ajuda se houver risco ou dúvida.')
+    passoAPasso: passos,
+    atencao: limparTexto(r.atencao || ''),
+    quandoPedirAjuda: limparTexto(r.quandoPedirAjuda || '')
   };
 }
 
