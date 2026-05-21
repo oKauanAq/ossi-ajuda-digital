@@ -1,27 +1,29 @@
 let FAQ = [];
 let CATEGORIAS = [];
 let sergioRequestId = 0;
+const STORAGE_SERGIO = 'ossi-sergio-chat';
+const historicoSergio = [];
 
 function mostrar(secaoId) {
-  document.querySelectorAll('.card').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.card').forEach((el) => el.classList.add('hidden'));
   document.getElementById(secaoId)?.classList.remove('hidden');
 }
 
-function renderFaq(lista, elId='faq-lista') {
+function renderFaq(lista, elId = 'faq-lista') {
   const wrap = document.getElementById(elId);
-  wrap.innerHTML = lista.map(item => `<article class="item-faq"><h4>${item.pergunta}</h4>${montarResposta(item).html}</article>`).join('');
+  wrap.innerHTML = lista.map((item) => `<article class="item-faq"><h4>${item.pergunta}</h4>${montarResposta(item).html}</article>`).join('');
 }
 
 function initNavegacao() {
-  document.querySelectorAll('[data-target]').forEach(btn => btn.addEventListener('click', () => mostrar(btn.dataset.target)));
+  document.querySelectorAll('[data-target]').forEach((btn) => btn.addEventListener('click', () => mostrar(btn.dataset.target)));
 }
 
 function initCategorias() {
   const lista = document.getElementById('lista-categorias');
-  lista.innerHTML = CATEGORIAS.map(cat => `<button class="btn">${cat}</button>`).join('');
-  [...lista.querySelectorAll('button')].forEach(btn => btn.addEventListener('click', () => {
+  lista.innerHTML = CATEGORIAS.map((cat) => `<button class="btn">${cat}</button>`).join('');
+  [...lista.querySelectorAll('button')].forEach((btn) => btn.addEventListener('click', () => {
     document.getElementById('faq-titulo').textContent = btn.textContent;
-    renderFaq(FAQ.filter(i => i.categoria === btn.textContent));
+    renderFaq(FAQ.filter((i) => i.categoria === btn.textContent));
     mostrar('faq');
   }));
 }
@@ -40,52 +42,95 @@ function initBusca() {
   });
 }
 
+function salvarHistorico() { localStorage.setItem(STORAGE_SERGIO, JSON.stringify(historicoSergio.slice(-30))); }
+function restaurarHistorico() {
+  const salvo = localStorage.getItem(STORAGE_SERGIO);
+  if (!salvo) return;
+  try {
+    const itens = JSON.parse(salvo);
+    if (!Array.isArray(itens)) return;
+    historicoSergio.splice(0, historicoSergio.length, ...itens.filter((i) => i && ['user', 'assistant'].includes(i.role) && i.content));
+  } catch {}
+}
+
+function renderChatSergio() {
+  const chat = document.getElementById('chat-sergio');
+  chat.innerHTML = historicoSergio.map((msg) => {
+    if (msg.role === 'user') return `<div class="msg msg-user"><p>${msg.content}</p></div>`;
+    const bloco = msg.respostaEstruturada ? montarResposta(msg.respostaEstruturada).html : `<div class="bloco-sergio"><p>${msg.content}</p></div>`;
+    return `<div class="msg msg-assistant">${bloco}</div>`;
+  }).join('');
+  chat.scrollTop = chat.scrollHeight;
+}
+
 function initSergio() {
-  const botaoSergio = document.getElementById('btn-sergio');
-  const campoPergunta = document.getElementById('pergunta-sergio');
-  const saida = document.getElementById('resposta-sergio');
+  const botao = document.getElementById('btn-sergio');
+  const campo = document.getElementById('pergunta-sergio');
+  const botaoLimpar = document.getElementById('btn-limpar-sergio');
+  restaurarHistorico();
+  renderChatSergio();
 
   const enviarPergunta = async () => {
-    const pergunta = campoPergunta.value.trim();
+    const pergunta = campo.value.trim();
     if (!pergunta) return;
-
     const requestId = ++sergioRequestId;
-    saida.innerHTML = '<p>Estou pensando...</p>';
-    botaoSergio.disabled = true;
-    botaoSergio.textContent = 'Sérgio está pensando...';
+    historicoSergio.push({ role: 'user', content: pergunta });
+    campo.value = '';
+    historicoSergio.push({ role: 'assistant', content: 'Sérgio está pensando...' });
+    renderChatSergio();
+    salvarHistorico();
+
+    botao.disabled = true;
+    botao.textContent = 'Sérgio está pensando...';
 
     try {
-      const respostaIA = await perguntarIA(pergunta);
-      if (requestId === sergioRequestId) {
-        saida.innerHTML = montarResposta(respostaIA).html;
-      }
+      const contexto = historicoSergio.filter((m) => m.role !== 'assistant' || m.content !== 'Sérgio está pensando...').slice(-6).map((m) => ({ role: m.role, content: m.content }));
+      const respostaIA = await perguntarIA(pergunta, contexto);
+      if (requestId !== sergioRequestId) return;
+      historicoSergio.pop();
+      historicoSergio.push({ role: 'assistant', content: respostaIA.respostaSimples, respostaEstruturada: respostaIA });
     } catch (_) {
       if (requestId !== sergioRequestId) return;
+      historicoSergio.pop();
       const melhor = encontrarMelhorResposta(FAQ, pergunta);
       if (melhor) {
-        saida.innerHTML = '<p>Modo local: na versão Vercel eu também uso IA. Aqui vou usar minha biblioteca de apoio.</p>' + montarResposta(melhor).html;
+        historicoSergio.push({ role: 'assistant', content: melhor.respostaSimples, respostaEstruturada: melhor });
       } else {
-        saida.innerHTML = '<p>Modo local: na versão Vercel eu também uso IA. Tente explicar com mais detalhes.</p>';
+        historicoSergio.push({ role: 'assistant', content: 'Modo local: na versão Vercel eu também uso IA. Tente explicar com mais detalhes.', respostaEstruturada: {
+          respostaSimples: 'Modo local: na versão Vercel eu também uso IA. Tente explicar com mais detalhes.',
+          passoAPasso: ['Escreva o nome do aplicativo.', 'Diga o que apareceu na tela.', 'Se houver risco, pare e peça ajuda.'],
+          atencao: 'Não compartilhe dados pessoais.',
+          quandoPedirAjuda: 'Peça ajuda se houver risco de golpe ou pedido de dinheiro.'
+        } });
       }
     } finally {
       if (requestId === sergioRequestId) {
-        botaoSergio.disabled = false;
-        botaoSergio.textContent = 'Perguntar ao Sérgio';
+        botao.disabled = false;
+        botao.textContent = 'Enviar';
+        renderChatSergio();
+        salvarHistorico();
       }
     }
   };
 
-  botaoSergio.addEventListener('click', enviarPergunta);
-  campoPergunta.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter') return;
-    event.preventDefault();
-    enviarPergunta();
+  botao.addEventListener('click', enviarPergunta);
+  campo.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      enviarPergunta();
+    }
+  });
+
+  botaoLimpar.addEventListener('click', () => {
+    historicoSergio.splice(0, historicoSergio.length);
+    localStorage.removeItem(STORAGE_SERGIO);
+    renderChatSergio();
   });
 }
 
 async function carregarDados() {
-  FAQ = await fetch('data/faq.json').then(r => r.json());
-  CATEGORIAS = await fetch('data/categorias.json').then(r => r.json());
+  FAQ = await fetch('data/faq.json').then((r) => r.json());
+  CATEGORIAS = await fetch('data/categorias.json').then((r) => r.json());
 }
 
 async function init() {
