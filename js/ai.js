@@ -1,6 +1,6 @@
 const termosBloqueadosIA = [
   'senha', 'cpf', 'cartão', 'cartao', 'código', 'codigo', 'documento',
-  'pix', 'banco', 'dinheiro', 'saúde', 'saude', 'link', 'golpe'
+  'pix', 'banco', 'dinheiro', 'saúde', 'saude', 'link', 'golpe', 'numero desconhecido', 'número desconhecido'
 ];
 
 function deveBloquearIA(pergunta = '') {
@@ -20,13 +20,16 @@ async function perguntarIA(pergunta, timeoutMs = 8000) {
       signal: controller.signal
     });
 
+    const dados = await resposta.json().catch(() => ({}));
+
     if (!resposta.ok) {
       throw new Error('IA indisponível');
     }
 
-    const dados = await resposta.json();
     if (dados?.fallback === true) {
-      throw new Error('Backend solicitou fallback local');
+      const erro = new Error('Backend solicitou fallback local');
+      erro.code = 'FALLBACK';
+      throw erro;
     }
 
     const r = dados?.resposta;
