@@ -1,11 +1,57 @@
-const termosBloqueadosIA = [
-  'senha', 'cpf', 'cartão', 'cartao', 'código', 'codigo', 'documento',
-  'pix', 'banco', 'dinheiro', 'saúde', 'saude', 'link', 'golpe', 'numero desconhecido', 'número desconhecido'
-];
+function limparTextoExibicao(valor = '') {
+  let texto = String(valor || '').trim();
+  if (!texto) return '';
 
-function deveBloquearIA(pergunta = '') {
-  const texto = pergunta.toLowerCase();
-  return termosBloqueadosIA.some((termo) => texto.includes(termo));
+  texto = texto.replace(/```json/gi, '').replace(/```/g, '').trim();
+  const inicio = texto.indexOf('{');
+  const fim = texto.lastIndexOf('}');
+
+  if (inicio >= 0 && fim > inicio) {
+    const jsonCandidato = texto.slice(inicio, fim + 1);
+    try {
+      const parsed = JSON.parse(jsonCandidato);
+      if (parsed?.respostaSimples || parsed?.passoAPasso) {
+        texto = [parsed.respostaSimples, ...(parsed.passoAPasso || []), parsed.atencao, parsed.quandoPedirAjuda]
+          .filter(Boolean)
+          .join(' ');
+      }
+    } catch {
+      texto = texto.replace(/\{[\s\S]*\}/g, ' ');
+    }
+  }
+
+  return texto
+    .replace(/"respostaSimples"\s*:\s*/gi, '')
+    .replace(/"passoAPasso"\s*:\s*/gi, '')
+    .replace(/"atencao"\s*:\s*/gi, '')
+    .replace(/"quandoPedirAjuda"\s*:\s*/gi, '')
+    .replace(/[{}\[\]"]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function normalizarRespostaIA(dados) {
+  const r = dados?.resposta || dados || {};
+
+  const respostaSimples = limparTextoExibicao(r.respostaSimples || '');
+  const atencao = limparTextoExibicao(r.atencao || '');
+  const quandoPedirAjuda = limparTextoExibicao(r.quandoPedirAjuda || '');
+
+  let passoAPasso = Array.isArray(r.passoAPasso)
+    ? r.passoAPasso.map((p) => limparTextoExibicao(p)).filter(Boolean)
+    : [];
+
+  if (!passoAPasso.length) {
+    const limpezaGeral = limparTextoExibicao(typeof r === 'string' ? r : JSON.stringify(r));
+    passoAPasso = limpezaGeral ? [limpezaGeral] : ['Siga com calma e peça ajuda se houver dúvida.'];
+  }
+
+  return {
+    respostaSimples: respostaSimples || 'Vamos resolver isso com calma.',
+    passoAPasso,
+    atencao: atencao || 'Cuidado com dados pessoais e financeiros.',
+    quandoPedirAjuda: quandoPedirAjuda || 'Peça ajuda se houver risco, dinheiro ou links suspeitos.'
+  };
 }
 
 async function perguntarIA(pergunta, timeoutMs = 8000) {
@@ -21,23 +67,8 @@ async function perguntarIA(pergunta, timeoutMs = 8000) {
     });
 
     const dados = await resposta.json().catch(() => ({}));
-
-    if (!resposta.ok) {
-      throw new Error('IA indisponível');
-    }
-
-    if (dados?.fallback === true) {
-      const erro = new Error('Backend solicitou fallback local');
-      erro.code = 'FALLBACK';
-      throw erro;
-    }
-
-    const r = dados?.resposta;
-    if (!r || !r.respostaSimples || !Array.isArray(r.passoAPasso) || !r.atencao || !r.quandoPedirAjuda) {
-      throw new Error('Resposta inválida da IA');
-    }
-
-    return r;
+    if (!resposta.ok || dados?.fallback === true) throw new Error('IA indisponível');
+    return normalizarRespostaIA(dados);
   } finally {
     clearTimeout(timer);
   }
