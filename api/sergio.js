@@ -7,7 +7,8 @@ const termosSensiveis = [
   'número desconhecido', 'numero desconhecido'
 ];
 
-const termosGenericos = new Set(['duvida', 'ajuda', 'celular', 'aplicativo', 'app', 'whatsapp', 'internet', 'coisa', 'mexer']);
+const termosGenericos = new Set(['duvida', 'ajuda', 'celular', 'aplicativo', 'app', 'whatsapp', 'internet', 'coisa', 'mexer', 'ola', 'oi', 'tenho', 'queria', 'perguntar', 'gostaria']);
+const termosIntencaoDigital = new Set(['facebook', 'instagram', 'messenger', 'conversar', 'amiga', 'amigo', 'mensagem', 'foto', 'perfil', 'abrir', 'apagar', 'enviar', 'receber', 'camera', 'volume', 'print', 'wifi', 'email', 'app', 'aplicativo', 'celular']);
 
 function normalizarTexto(texto = '') {
   return texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
@@ -21,8 +22,16 @@ function contemConteudoSensivel(texto = '') {
 function perguntaVaga(texto = '') {
   const t = normalizarTexto(texto);
   if (!t || t.length < 6) return true;
-  const tokens = t.split(/\s+/).filter(Boolean);
+
+  if (['oi', 'ola', 'me ajuda', 'ajuda', 'tenho uma duvida', 'nao sei mexer', 'queria perguntar uma coisa', 'ola gostaria de tirar uma duvida'].includes(t)) return true;
+
+  const semFrasesGenericas = t
+    .replace(/\b(me ajuda|tenho uma duvida|tenho duvida|duvida|nao sei mexer|queria perguntar uma coisa|gostaria de tirar uma duvida)\b/g, ' ')
+    .trim();
+
+  const tokens = semFrasesGenericas.split(/\s+/).map((tok) => tok.replace(/[^\p{L}\p{N}-]/gu, '')).filter(Boolean);
   const especificos = tokens.filter((tok) => tok.length > 2 && !termosGenericos.has(tok));
+  if (especificos.some((tok) => termosIntencaoDigital.has(tok))) return false;
   return especificos.length === 0;
 }
 
@@ -59,8 +68,8 @@ export default async function handler(req, res) {
   const { pergunta } = req.body || {};
   if (!pergunta || typeof pergunta !== 'string') return res.status(400).json({ error: 'Pergunta inválida.' });
 
-  if (perguntaVaga(pergunta)) return res.status(200).json({ esclarecimento: true, resposta: respostaEsclarecimento() });
   if (contemConteudoSensivel(pergunta)) return res.status(200).json({ seguro: true, resposta: respostaSeguraLocal() });
+  if (perguntaVaga(pergunta)) return res.status(200).json({ esclarecimento: true, resposta: respostaEsclarecimento() });
   if (!process.env.NVIDIA_API_KEY) return res.status(200).json({ fallback: true });
 
   try {
@@ -71,7 +80,7 @@ export default async function handler(req, res) {
         model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', temperature: 0.2, max_tokens: 600,
         extra_body: { chat_template_kwargs: { enable_thinking: false } },
         messages: [
-          { role: 'system', content: 'Você é o assistente Sérgio para idosos. Linguagem simples, curta e acolhedora. Use apenas o contexto da biblioteca interna como base principal. Nunca peça senha, CPF, cartão, código, documento ou dados de saúde. Se não houver resposta exata no contexto, dê orientação geral segura. Responda APENAS com JSON válido no formato: {"respostaSimples":"","passoAPasso":[""],"atencao":"","quandoPedirAjuda":""}.' },
+          { role: 'system', content: 'Você é o assistente Sérgio para idosos. Linguagem simples, curta e acolhedora. Responda como assistente de inclusão digital para idosos. A biblioteca é apoio, mas você pode responder dúvidas digitais gerais de forma segura mesmo se não houver item exato na biblioteca. Nunca peça senha, CPF, cartão, código, documento ou dados de saúde. Responda APENAS com JSON válido no formato: {"respostaSimples":"","passoAPasso":[""],"atencao":"","quandoPedirAjuda":""}.' },
           { role: 'user', content: `Pergunta do usuário: ${pergunta}\n\nContexto da biblioteca interna (FAQ): ${JSON.stringify(contextoFaq)}` }
         ]
       })

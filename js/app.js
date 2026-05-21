@@ -65,7 +65,7 @@ function initSergio() {
       if (melhor) {
         saida.innerHTML = '<p>Vou responder com minha biblioteca segura de dúvidas.</p>' + montarResposta(melhor).html;
       } else {
-        saida.innerHTML = respostaEsclarecimento().html;
+        saida.innerHTML = '<p>Não consegui responder agora. Tente escrever a dúvida com mais detalhes, por exemplo: "como mandar mensagem no Facebook".</p>';
       }
     }
   });

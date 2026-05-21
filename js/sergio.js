@@ -3,10 +3,18 @@ const termosSensiveis = [
   'saúde', 'saude', 'golpe', 'link', 'desconhecido', 'compra', 'dinheiro', 'cartao'
 ];
 
-const termosVagos = [
+const frasesVagas = [
   'oi', 'olá', 'ola', 'tenho uma dúvida', 'tenho uma duvida', 'me ajuda', 'ajuda',
-  'não sei mexer', 'nao sei mexer', 'queria perguntar uma coisa', 'dúvida', 'duvida'
+  'não sei mexer', 'nao sei mexer', 'queria perguntar uma coisa', 'dúvida', 'duvida',
+  'ola gostaria de tirar uma duvida'
 ];
+
+const termosIntencaoDigital = new Set([
+  'facebook', 'instagram', 'messenger', 'conversar', 'amiga', 'amigo', 'mensagem',
+  'foto', 'perfil', 'abrir', 'apagar', 'enviar', 'receber', 'camera', 'câmera',
+  'volume', 'print', 'wifi', 'wi-fi', 'email', 'e-mail', 'aplicativo', 'app',
+  'celular', 'whatsapp', 'ligacao', 'ligação'
+]);
 
 const termosGenericos = new Set([
   'duvida', 'dúvida', 'ajuda', 'celular', 'aplicativo', 'app', 'whatsapp', 'internet',
@@ -29,9 +37,21 @@ function ehSensivel(texto = '') {
 function ehPerguntaVaga(texto = '') {
   const t = normalizarTexto(texto);
   if (!t || t.length < 6) return true;
-  if (termosVagos.some((item) => t === normalizarTexto(item) || t.includes(normalizarTexto(item)))) return true;
-  const tokens = t.split(/\s+/).filter(Boolean);
+
+  if (frasesVagas.some((item) => t === normalizarTexto(item))) return true;
+
+  const semFrasesGenericas = t
+    .replace(/\b(me ajuda|tenho uma duvida|tenho duvida|duvida|nao sei mexer|queria perguntar uma coisa|gostaria de tirar uma duvida)\b/g, ' ')
+    .trim();
+
+  const tokens = semFrasesGenericas
+    .split(/\s+/)
+    .map((tok) => tok.replace(/[^\p{L}\p{N}-]/gu, ''))
+    .filter(Boolean);
+
   const especificos = tokens.filter((tok) => tok.length > 2 && !termosGenericos.has(tok));
+  if (especificos.some((tok) => termosIntencaoDigital.has(tok))) return false;
+
   return especificos.length === 0;
 }
 
