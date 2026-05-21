@@ -25,20 +25,6 @@ function respostaSeguraLocal() {
   };
 }
 
-function respostaSeguraGenerica() {
-  return {
-    respostaSimples: 'Entendi sua dúvida. Vamos tentar de um jeito simples e seguro.',
-    passoAPasso: [
-      'Abra o aplicativo oficial relacionado à sua dúvida.',
-      'Procure a opção de Configurações ou Ajuda.',
-      'Siga apenas instruções que aparecem dentro do app oficial.',
-      'Se algo parecer estranho, pare e peça ajuda para alguém de confiança.'
-    ],
-    atencao: 'Nunca compartilhe senha, código de verificação, CPF ou dados bancários.',
-    quandoPedirAjuda: 'Peça ajuda se aparecer cobrança, pedido de código ou mensagem suspeita.'
-  };
-}
-
 function extrairCampo(texto, inicio, fimOpcional) {
   const inicioRegex = new RegExp(`${inicio}\\s*:\\s*([\\s\\S]*?)${fimOpcional ? `(?=\\n${fimOpcional}\\s*:)` : '$'}`, 'i');
   const match = texto.match(inicioRegex);
@@ -50,9 +36,14 @@ function estruturarRespostaIA(texto = '') {
     .replace(/```json/gi, '')
     .replace(/```/g, '')
     .trim();
+  const primeiroAbre = textoSemMarkdown.indexOf('{');
+  const ultimoFecha = textoSemMarkdown.lastIndexOf('}');
+  const trechoJson = (primeiroAbre !== -1 && ultimoFecha !== -1 && ultimoFecha > primeiroAbre)
+    ? textoSemMarkdown.slice(primeiroAbre, ultimoFecha + 1).trim()
+    : textoSemMarkdown;
 
   try {
-    const parsed = JSON.parse(textoSemMarkdown);
+    const parsed = JSON.parse(trechoJson);
     const resposta = {
       respostaSimples: String(parsed?.respostaSimples || '').trim(),
       passoAPasso: Array.isArray(parsed?.passoAPasso) ? parsed.passoAPasso.map((p) => String(p).trim()).filter(Boolean) : [],
@@ -111,12 +102,19 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning',
         temperature: 0.2,
-        max_tokens: 300,
+        max_tokens: 600,
+        extra_body: {
+          chat_template_kwargs: {
+            enable_thinking: false
+          }
+        },
         messages: [
           {
             role: 'system',
             content: `Você é o assistente Sérgio para idosos. Responda em português claro e simples.
-Responda apenas com JSON válido. Não use markdown. Não escreva texto fora do JSON.
+Responda apenas com JSON válido e puro.
+Não escreva explicações antes ou depois do JSON.
+Não use markdown e não use blocos \`\`\`json.
 Use exatamente este formato:
 {
   "respostaSimples": "texto curto",
@@ -139,7 +137,7 @@ No campo passoAPasso, escreva de 3 a 5 passos curtos.`
     const texto = dados?.choices?.[0]?.message?.content?.trim();
     const estruturada = estruturarRespostaIA(texto || '');
 
-    if (!estruturada) return res.status(200).json({ resposta: respostaSeguraGenerica(), fallback: true });
+    if (!estruturada) return res.status(200).json({ fallback: true });
 
     return res.status(200).json({ resposta: estruturada });
   } catch (_) {
