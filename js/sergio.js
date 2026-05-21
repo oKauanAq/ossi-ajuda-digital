@@ -23,6 +23,36 @@ function normalizarTexto(texto = '') {
   return texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
 }
 
+function escaparHtml(texto = '') {
+  return String(texto)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function limparCampoRender(texto = '') {
+  return String(texto)
+    .replace(/```json|```/gi, ' ')
+    .replace(/[{}\[\]"]/g, ' ')
+    .replace(/\\[nrt]/g, ' ')
+    .replace(/\\/g, ' ')
+    .replace(/\b(resposta\s*simples|respostasimples|passo\s*a\s*passo|passoapasso|atencao|aten[cç][aã]o|quando\s*pedir\s*ajuda|quandopedirajuda)\s*[:=-]?/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function sanitizarResposta(item = {}) {
+  const passos = Array.isArray(item.passoAPasso) ? item.passoAPasso : String(item.passoAPasso || '').split(/\n|\s*\d+[).:-]\s*/);
+  return {
+    respostaSimples: limparCampoRender(item.respostaSimples),
+    passoAPasso: passos.map((p) => limparCampoRender(p)).filter(Boolean).slice(0, 6),
+    atencao: limparCampoRender(item.atencao),
+    quandoPedirAjuda: limparCampoRender(item.quandoPedirAjuda)
+  };
+}
+
 function detectarApoioVisual(resposta = '', pergunta = '', tipo = '') {
   const base = normalizarTexto(`${resposta} ${pergunta} ${tipo}`);
   const regras = [
@@ -39,62 +69,36 @@ function detectarApoioVisual(resposta = '', pergunta = '', tipo = '') {
 }
 
 function montarResposta(item, pergunta = '') {
-  const apoio = detectarApoioVisual(item.respostaSimples, pergunta, item.categoria || '');
-  const passosHtml = item.passoAPasso.map((p, i) => `<li><span class="passo-numero">${i + 1}</span><span>${p}</span></li>`).join('');
-  const texto = `Resposta simples: ${item.respostaSimples}\nPasso a passo: ${item.passoAPasso.join(' ')}\nAtenção: ${item.atencao}\nQuando pedir ajuda: ${item.quandoPedirAjuda}`;
+  const limpo = sanitizarResposta(item);
+  const apoio = detectarApoioVisual(limpo.respostaSimples, pergunta, item.categoria || '');
+  const passosHtml = limpo.passoAPasso.map((p, i) => `<li><span class="passo-numero">${i + 1}</span><span>${escaparHtml(p)}</span></li>`).join('');
+  const texto = `Resposta simples: ${limpo.respostaSimples}\nPasso a passo: ${limpo.passoAPasso.join(' ')}\nAtenção: ${limpo.atencao}\nQuando pedir ajuda: ${limpo.quandoPedirAjuda}`;
   return {
     html: `<div class="bloco-sergio">
-      ${apoio ? `<div class="apoio-visual" data-asset-path="assets/guias/"><strong>${apoio.emoji}</strong><span>${apoio.titulo}</span></div>` : ''}
-      <p class="resposta-destaque">${item.respostaSimples}</p>
+      ${apoio ? `<div class="apoio-visual" data-asset-path="assets/guias/"><strong>${apoio.emoji}</strong><span>${escaparHtml(apoio.titulo)}</span></div>` : ''}
+      <p class="resposta-destaque">${escaparHtml(limpo.respostaSimples)}</p>
       <ol class="passos-sergio">${passosHtml}</ol>
-      <p class="caixa-atencao"><strong>Atenção:</strong> ${item.atencao}</p>
-      <p class="caixa-ajuda"><strong>Quando pedir ajuda:</strong> ${item.quandoPedirAjuda}</p>
-      <button class="small-btn btn-ouvir" onclick='ouvirTexto(${JSON.stringify(texto)})'>🔊 Ouvir resposta</button>
+      <p class="caixa-atencao"><strong>Atenção:</strong> ${escaparHtml(limpo.atencao)}</p>
+      <p class="caixa-ajuda"><strong>Quando pedir ajuda:</strong> ${escaparHtml(limpo.quandoPedirAjuda)}</p>
+      <button class="small-btn btn-ouvir" onclick='ouvirTexto(${JSON.stringify(escaparHtml(texto))})'>🔊 Ouvir resposta</button>
     </div>`,
     texto
   };
 }
 
-function pontuacaoFaq(item, texto) {
-  const t = normalizarTexto(texto);
-  const tokens = t.split(/\s+/).map((termo) => termo.replace(/[^\p{L}\p{N}]/gu, '')).filter(Boolean);
-  const relevantes = tokens.filter((termo) => termo.length > 2 && !termosGenericos.has(termo));
-  if (relevantes.length === 0) return -10;
-  let pontos = 0;
-  const perguntaFaq = normalizarTexto(item.pergunta || '');
-  const categoriaFaq = normalizarTexto(item.categoria || '');
-  const palavrasFaq = (item.palavrasChave || []).map((k) => normalizarTexto(k));
-  for (const termo of relevantes) {
-    if (perguntaFaq.includes(termo)) pontos += 3;
-    if (categoriaFaq.includes(termo)) pontos += 2;
-    if (palavrasFaq.some((k) => k.includes(termo) || termo.includes(k))) pontos += 4;
-  }
-  if (perguntaFaq.includes(t) || t.includes(perguntaFaq)) pontos += 4;
-  return pontos;
-}
-
-function encontrarMelhorResposta(faq, pergunta) {
-  let melhor = null;
-  let max = -999;
-  for (const item of faq) {
-    const pontos = pontuacaoFaq(item, pergunta);
-    if (pontos > max) {
-      max = pontos;
-      melhor = item;
-    }
-  }
-  return max >= 8 ? melhor : null;
-}
-
 function initMicrofone(inputEl) {
   const btnMic = document.getElementById('btn-sergio-mic');
   const status = document.getElementById('status-microfone');
+  const autoEnviar = document.getElementById('sergio-auto-enviar');
+  const btnEnviar = document.getElementById('btn-sergio');
   const Reconhecimento = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const temMedia = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+  const ambienteSeguro = window.isSecureContext || ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
-  if (!Reconhecimento) {
+  if (!Reconhecimento || !temMedia || !ambienteSeguro) {
     btnMic.classList.add('hidden');
     status.classList.remove('hidden');
-    status.textContent = 'Microfone não disponível neste navegador.';
+    status.textContent = 'Microfone não disponível neste navegador. Use Google Chrome ou digite sua pergunta.';
     return;
   }
 
@@ -102,37 +106,56 @@ function initMicrofone(inputEl) {
   reconhecimento.lang = 'pt-BR';
   reconhecimento.interimResults = false;
 
+  const resetBotao = () => { btnMic.textContent = '🎙️ Falar'; };
+
   reconhecimento.onstart = () => {
+    btnMic.textContent = '🎙️ Ouvindo...';
     status.classList.remove('hidden');
-    status.textContent = 'Estou ouvindo...';
+    status.textContent = 'Estou ouvindo. Pode falar agora.';
   };
 
-  btnMic.addEventListener('click', () => {
+  btnMic.addEventListener('click', async () => {
     status.classList.remove('hidden');
-    status.textContent = 'Pode falar agora.';
     try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((t) => t.stop());
       reconhecimento.start();
-    } catch (_) {}
+    } catch (error) {
+      resetBotao();
+      if (error?.name === 'NotAllowedError') {
+        status.textContent = 'Permissão negada. Clique no cadeado do site e permita o microfone.';
+      } else if (error?.name === 'NotFoundError') {
+        status.textContent = 'Nenhum microfone foi encontrado.';
+      } else {
+        status.textContent = 'Não consegui acessar o microfone. Tente digitar sua pergunta.';
+      }
+    }
   });
 
   reconhecimento.onresult = (event) => {
     const texto = event.results?.[0]?.[0]?.transcript?.trim();
-    if (texto) {
-      inputEl.value = texto;
-      inputEl.focus();
+    if (!texto) return;
+    inputEl.value = texto;
+    inputEl.focus();
+    if (autoEnviar?.checked) {
+      btnEnviar.click();
+      status.textContent = 'Texto reconhecido e enviado automaticamente.';
+    } else {
+      status.textContent = 'Confira o texto e clique em Enviar.';
     }
   };
 
   reconhecimento.onend = () => {
-    setTimeout(() => status.classList.add('hidden'), 1400);
+    resetBotao();
   };
 
   reconhecimento.onerror = (event) => {
+    resetBotao();
     status.classList.remove('hidden');
     if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-      status.textContent = 'Permissão de microfone negada. Libere o acesso no navegador.';
+      status.textContent = 'Permissão negada. Clique no cadeado do site e permita o microfone.';
       return;
     }
-    status.textContent = 'Não entendi. Tente de novo ou digite.';
+    status.textContent = 'Não consegui acessar o microfone. Tente digitar sua pergunta.';
   };
 }
