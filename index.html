@@ -11,75 +11,77 @@
 <body>
   <header class="topo">
     <img src="assets/logo-ossi.jpg" alt="Logo da OSSI" class="logo" />
-    <h1>OSSI Ajuda Digital</h1>
+    <div>
+      <h1>OSSI Ajuda Digital</h1>
+      <p class="subtitulo">Assistente: Sérgio</p>
+    </div>
   </header>
 
   <main class="container">
     <section class="boas-vindas card">
-      <h2>Olá, eu sou o Sérgio 👋</h2>
-      <p>Posso te ajudar com celular, WhatsApp, internet, golpes, Pix e dúvidas do dia a dia.</p>
+      <h2>Olá! Eu sou o Sérgio 👋</h2>
+      <p>Escolha uma opção para começar ou escreva sua dúvida.</p>
     </section>
 
-    <section class="atalhos" aria-label="Ações principais">
-      <button class="btn btn-atalho" data-action="abrir-chat">💬 Conversar com o Sérgio</button>
-      <button class="btn btn-atalho" data-target="seguranca">🛡️ Estou com medo de golpe</button>
-      <button class="btn btn-atalho" data-action="pergunta-rapida" data-question="Preciso de ajuda com o celular.">📱 Ajuda com celular</button>
-      <button class="btn btn-atalho" data-action="pergunta-rapida" data-question="Estou com dúvida no WhatsApp.">🟢 WhatsApp</button>
-      <button class="btn btn-atalho" data-target="seguranca" data-action="pergunta-rapida" data-question="Tenho uma dúvida sobre Pix ou banco e quero fazer com segurança.">💳 Banco e Pix com segurança</button>
-      <button class="btn btn-atalho" data-action="abrir-chat" data-question="Dúvidas comuns">❓ Dúvidas frequentes</button>
-      <button class="btn btn-atalho" data-target="instalar">📲 Instalar no celular</button>
-      <a class="btn btn-atalho" href="https://forms.gle/" target="_blank" rel="noopener noreferrer">⭐ Avaliar o sistema</a>
+    <section id="sergio-widget" class="sergio-widget" aria-label="Chat do Sérgio">
+      <header class="sergio-widget-header">
+        <h2><span class="avatar-fallback" aria-hidden="true">💬</span><img class="sergio-avatar hidden" alt="Avatar do Sérgio" /> Chat do Sérgio</h2>
+        <button id="btn-limpar-sergio" class="small-btn" type="button">Limpar conversa</button>
+      </header>
+
+      <div class="chat-paineis">
+        <details id="painel-assuntos" class="painel-opcoes">
+          <summary>☰ Escolher assunto</summary>
+          <div class="chips-wrap" id="chips-assuntos"></div>
+        </details>
+
+        <details id="painel-duvidas" class="painel-opcoes">
+          <summary>Dúvidas comuns</summary>
+          <div class="chips-wrap" id="chips-duvidas"></div>
+        </details>
+      </div>
+
+      <div id="chat-sergio" class="chat-sergio" aria-live="polite"></div>
+      <div class="chat-acoes">
+        <input id="pergunta-sergio" type="text" placeholder="Digite sua dúvida" />
+        <div class="chat-botoes">
+          <button id="btn-sergio" class="btn" type="button">Enviar</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card mais-opcoes">
+      <h3>Mais opções</h3>
+      <div class="mais-opcoes-links">
+        <button class="link-btn" data-target="faq" type="button">Categorias de dúvidas</button>
+        <button class="link-btn" data-target="seguranca" type="button">Modo Segurança</button>
+        <button class="link-btn" data-target="instalar" type="button">Como adicionar à tela inicial</button>
+        <a class="link-btn" href="https://forms.gle/" target="_blank" rel="noopener noreferrer">Avaliar o sistema</a>
+      </div>
     </section>
 
     <section id="seguranca" class="card hidden">
       <h2>Modo Segurança</h2>
-      <p>Se houver medo de golpe, número desconhecido ou compra suspeita:</p>
       <ol>
         <li><strong>PARE.</strong> Não clique em links.</li>
         <li><strong>NÃO envie</strong> senha, CPF, código ou foto de documento.</li>
         <li><strong>NÃO faça</strong> Pix, compra ou confirmação.</li>
-        <li><strong>PEÇA AJUDA</strong> de familiar, cuidador ou equipe da OSSI.</li>
       </ol>
     </section>
 
     <section id="instalar" class="card hidden">
       <h2>Adicionar à tela inicial</h2>
-      <h3>Android (Chrome)</h3>
-      <p>Abra o site, toque em menu (3 pontos) e escolha <strong>Adicionar à tela inicial</strong>.</p>
-      <h3>iPhone (Safari)</h3>
-      <p>Abra o site, toque em compartilhar e escolha <strong>Adicionar à Tela de Início</strong>.</p>
+      <p>Android: menu &gt; <strong>Adicionar à tela inicial</strong>. iPhone: compartilhar &gt; <strong>Adicionar à Tela de Início</strong>.</p>
     </section>
 
     <section id="faq" class="card hidden">
       <h2 id="faq-titulo">Dúvidas frequentes</h2>
       <div id="faq-lista"></div>
     </section>
+
+    <p id="sw-update-msg" class="sw-update-msg hidden">Atualizamos o sistema. Se algo parecer antigo, feche e abra novamente.</p>
   </main>
 
-  <button id="sergio-widget-toggle" class="sergio-widget-toggle" type="button" title="Abrir conversa com o Sérgio" aria-label="Abrir conversa com o Sérgio"><span class="avatar-fallback">💬</span><img class="sergio-avatar hidden" alt="Avatar do Sérgio" /></button>
-
-  <section id="sergio-widget" class="sergio-widget hidden" aria-label="Chat do Sérgio">
-    <header class="sergio-widget-header">
-      <h2><span class="avatar-fallback" aria-hidden="true">💬</span><img class="sergio-avatar hidden" alt="Avatar do Sérgio" /> Sérgio — Ajuda Digital</h2>
-      <button id="sergio-widget-close" class="small-btn" type="button" aria-label="Fechar chat">Fechar ✕</button>
-    </header>
-    <div id="chat-sergio" class="chat-sergio" aria-live="polite"></div>
-    <p id="status-microfone" class="status-microfone hidden">Estou ouvindo...</p>
-    <p class="privacidade-mic">Você pode falar ou digitar. Se o microfone não funcionar, digite sua pergunta.</p>
-    <div class="chat-acoes">
-      <input id="pergunta-sergio" type="text" placeholder="Digite sua dúvida" />
-      <div class="chat-botoes">
-        <button id="btn-sergio-mic" class="btn" type="button">🎙️ Falar</button>
-        <button id="btn-sergio-mic-test" class="btn" type="button">🧪 Testar microfone</button>
-        <button id="btn-sergio" class="btn" type="button">Enviar</button>
-      </div>
-      <label class="auto-enviar-wrap"><input id="sergio-auto-enviar" type="checkbox" /> Enviar automaticamente após falar</label>
-      <p class="privacidade-mic">O áudio não é salvo. Ele serve apenas para preencher sua pergunta.</p>
-    </div>
-    <button id="btn-limpar-sergio" class="small-btn" type="button">Limpar conversa</button>
-  </section>
-
-  <script src="js/tts.js"></script>
   <script src="js/search.js"></script>
   <script src="js/sergio.js"></script>
   <script src="js/ai.js"></script>
