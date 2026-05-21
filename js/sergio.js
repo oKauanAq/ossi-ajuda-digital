@@ -6,7 +6,7 @@ function ehSensivel(texto='') {
 }
 
 function montarResposta(item) {
-  const passosHtml = item.passoAPasso.map((p, i) => `<li>${i + 1}. ${p}</li>`).join('');
+  const passosHtml = item.passoAPasso.map((p) => `<li>${p}</li>`).join('');
   const texto = `Resposta simples: ${item.respostaSimples}\nPasso a passo: ${item.passoAPasso.join(' ')}\nAtenção: ${item.atencao}\nQuando pedir ajuda: ${item.quandoPedirAjuda}`;
   return {
     html: `<div class="bloco-sergio">
@@ -32,6 +32,7 @@ function respostaPadraoSegura() {
 
 function pontuacaoFaq(item, texto) {
   const t = texto.toLowerCase();
+  const termosGenericos = new Set(['whatsapp', 'celular', 'aplicativo', 'app']);
   let pontos = 0;
   if (item.categoria.toLowerCase().includes(t) || t.includes(item.categoria.toLowerCase())) pontos += 4;
   if (item.pergunta.toLowerCase().includes(t) || t.includes(item.pergunta.toLowerCase())) pontos += 5;
@@ -39,8 +40,13 @@ function pontuacaoFaq(item, texto) {
     if (t.includes(k.toLowerCase())) pontos += 3;
   }
   for (const termo of t.split(/\s+/)) {
-    if (termo.length > 2 && item.pergunta.toLowerCase().includes(termo)) pontos += 1;
+    if (termo.length > 2 && !termosGenericos.has(termo) && item.pergunta.toLowerCase().includes(termo)) pontos += 1;
   }
+  const termosRelevantes = t
+    .split(/\s+/)
+    .map((termo) => termo.replace(/[^\p{L}\p{N}]/gu, ''))
+    .filter((termo) => termo.length > 2 && !termosGenericos.has(termo));
+  if (termosRelevantes.length === 0) pontos -= 8;
   return pontos;
 }
 
@@ -54,5 +60,5 @@ function encontrarMelhorResposta(faq, pergunta) {
       melhor = item;
     }
   }
-  return max > 0 ? melhor : null;
+  return max >= 6 ? melhor : null;
 }

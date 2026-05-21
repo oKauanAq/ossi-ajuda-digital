@@ -25,6 +25,20 @@ function respostaSeguraLocal() {
   };
 }
 
+function respostaSeguraGenerica() {
+  return {
+    respostaSimples: 'Entendi sua dúvida. Vamos tentar de um jeito simples e seguro.',
+    passoAPasso: [
+      'Abra o aplicativo oficial relacionado à sua dúvida.',
+      'Procure a opção de Configurações ou Ajuda.',
+      'Siga apenas instruções que aparecem dentro do app oficial.',
+      'Se algo parecer estranho, pare e peça ajuda para alguém de confiança.'
+    ],
+    atencao: 'Nunca compartilhe senha, código de verificação, CPF ou dados bancários.',
+    quandoPedirAjuda: 'Peça ajuda se aparecer cobrança, pedido de código ou mensagem suspeita.'
+  };
+}
+
 function extrairCampo(texto, inicio, fimOpcional) {
   const inicioRegex = new RegExp(`${inicio}\\s*:\\s*([\\s\\S]*?)${fimOpcional ? `(?=\\n${fimOpcional}\\s*:)` : '$'}`, 'i');
   const match = texto.match(inicioRegex);
@@ -32,6 +46,26 @@ function extrairCampo(texto, inicio, fimOpcional) {
 }
 
 function estruturarRespostaIA(texto = '') {
+  const textoSemMarkdown = texto
+    .replace(/```json/gi, '')
+    .replace(/```/g, '')
+    .trim();
+
+  try {
+    const parsed = JSON.parse(textoSemMarkdown);
+    const resposta = {
+      respostaSimples: String(parsed?.respostaSimples || '').trim(),
+      passoAPasso: Array.isArray(parsed?.passoAPasso) ? parsed.passoAPasso.map((p) => String(p).trim()).filter(Boolean) : [],
+      atencao: String(parsed?.atencao || '').trim(),
+      quandoPedirAjuda: String(parsed?.quandoPedirAjuda || '').trim()
+    };
+    if (resposta.respostaSimples && resposta.passoAPasso.length && resposta.atencao && resposta.quandoPedirAjuda) {
+      return resposta;
+    }
+  } catch (_) {
+    // fallback por extração textual abaixo
+  }
+
   const respostaSimples = extrairCampo(texto, 'Resposta simples', 'Passo a passo');
   const blocoPassos = extrairCampo(texto, 'Passo a passo', 'Atenção');
   const atencao = extrairCampo(texto, 'Atenção', 'Quando pedir ajuda');
@@ -81,7 +115,16 @@ export default async function handler(req, res) {
         messages: [
           {
             role: 'system',
-            content: `Você é o assistente Sérgio para idosos. Responda em português claro e simples.\n\nUse obrigatoriamente este formato:\nResposta simples:\nPasso a passo:\nAtenção:\nQuando pedir ajuda:\n\nNo campo Passo a passo, escreva uma lista com 3 a 5 passos.`
+            content: `Você é o assistente Sérgio para idosos. Responda em português claro e simples.
+Responda apenas com JSON válido. Não use markdown. Não escreva texto fora do JSON.
+Use exatamente este formato:
+{
+  "respostaSimples": "texto curto",
+  "passoAPasso": ["passo 1", "passo 2", "passo 3"],
+  "atencao": "alerta curto",
+  "quandoPedirAjuda": "quando pedir ajuda"
+}
+No campo passoAPasso, escreva de 3 a 5 passos curtos.`
           },
           { role: 'user', content: pergunta }
         ]
@@ -89,19 +132,17 @@ export default async function handler(req, res) {
     });
 
     if (!resposta.ok) {
-      return res.status(502).json({ error: 'Falha na resposta da NVIDIA.' });
+      return res.status(200).json({ fallback: true });
     }
 
     const dados = await resposta.json();
     const texto = dados?.choices?.[0]?.message?.content?.trim();
     const estruturada = estruturarRespostaIA(texto || '');
 
-    if (!estruturada) {
-      return res.status(422).json({ error: 'Resposta da IA em formato inválido.' });
-    }
+    if (!estruturada) return res.status(200).json({ resposta: respostaSeguraGenerica(), fallback: true });
 
     return res.status(200).json({ resposta: estruturada });
   } catch (_) {
-    return res.status(500).json({ error: 'Erro interno ao consultar IA.' });
+    return res.status(200).json({ fallback: true });
   }
 }
