@@ -49,7 +49,7 @@ function montarResposta(item, pergunta = '') {
       <ol class="passos-sergio">${passosHtml}</ol>
       <p class="caixa-atencao"><strong>Atenção:</strong> ${item.atencao}</p>
       <p class="caixa-ajuda"><strong>Quando pedir ajuda:</strong> ${item.quandoPedirAjuda}</p>
-      <button class="small-btn" onclick='ouvirTexto(${JSON.stringify(texto)})'>🔊 Ouvir resposta</button>
+      <button class="small-btn btn-ouvir" onclick='ouvirTexto(${JSON.stringify(texto)})'>🔊 Ouvir resposta</button>
     </div>`,
     texto
   };
@@ -94,7 +94,7 @@ function initMicrofone(inputEl) {
   if (!Reconhecimento) {
     btnMic.classList.add('hidden');
     status.classList.remove('hidden');
-    status.textContent = 'Microfone não disponível neste navegador';
+    status.textContent = 'Microfone não disponível neste navegador.';
     return;
   }
 
@@ -107,6 +107,14 @@ function initMicrofone(inputEl) {
     status.textContent = 'Estou ouvindo...';
   };
 
+  btnMic.addEventListener('click', () => {
+    status.classList.remove('hidden');
+    status.textContent = 'Pode falar agora.';
+    try {
+      reconhecimento.start();
+    } catch (_) {}
+  });
+
   reconhecimento.onresult = (event) => {
     const texto = event.results?.[0]?.[0]?.transcript?.trim();
     if (texto) {
@@ -116,13 +124,15 @@ function initMicrofone(inputEl) {
   };
 
   reconhecimento.onend = () => {
-    status.classList.add('hidden');
+    setTimeout(() => status.classList.add('hidden'), 1400);
   };
 
-  reconhecimento.onerror = () => {
+  reconhecimento.onerror = (event) => {
     status.classList.remove('hidden');
-    status.textContent = 'Não consegui ouvir. Tente de novo ou digite.';
+    if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+      status.textContent = 'Permissão de microfone negada. Libere o acesso no navegador.';
+      return;
+    }
+    status.textContent = 'Não entendi. Tente de novo ou digite.';
   };
-
-  btnMic.addEventListener('click', () => reconhecimento.start());
 }

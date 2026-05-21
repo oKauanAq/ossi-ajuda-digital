@@ -25,8 +25,8 @@
       <button class="btn btn-atalho" data-target="seguranca">🛡️ Estou com medo de golpe</button>
       <button class="btn btn-atalho" data-action="pergunta-rapida" data-question="Preciso de ajuda com o celular.">📱 Ajuda com celular</button>
       <button class="btn btn-atalho" data-action="pergunta-rapida" data-question="Estou com dúvida no WhatsApp.">🟢 WhatsApp</button>
-      <button class="btn btn-atalho" data-target="seguranca" data-action="pergunta-rapida" data-question="Recebi pedido de Pix e quero confirmar se é seguro.">💳 Banco e Pix com segurança</button>
-      <button class="btn btn-atalho" data-target="faq">❓ Dúvidas frequentes</button>
+      <button class="btn btn-atalho" data-target="seguranca" data-action="pergunta-rapida" data-question="Tenho uma dúvida sobre Pix ou banco e quero fazer com segurança.">💳 Banco e Pix com segurança</button>
+      <button class="btn btn-atalho" data-action="abrir-chat" data-question="Dúvidas comuns">❓ Dúvidas frequentes</button>
       <button class="btn btn-atalho" data-target="instalar">📲 Instalar no celular</button>
       <a class="btn btn-atalho" href="https://forms.gle/" target="_blank" rel="noopener noreferrer">⭐ Avaliar o sistema</a>
     </section>
@@ -56,11 +56,11 @@
     </section>
   </main>
 
-  <button id="sergio-widget-toggle" class="sergio-widget-toggle" type="button" title="Falar com Sérgio" aria-label="Falar com Sérgio">💬</button>
+  <button id="sergio-widget-toggle" class="sergio-widget-toggle" type="button" title="Abrir conversa com o Sérgio" aria-label="Abrir conversa com o Sérgio"><span class="avatar-fallback">💬</span><img class="sergio-avatar hidden" alt="Avatar do Sérgio" /></button>
 
   <section id="sergio-widget" class="sergio-widget hidden" aria-label="Chat do Sérgio">
     <header class="sergio-widget-header">
-      <h2>Sérgio — Ajuda Digital</h2>
+      <h2><span class="avatar-fallback" aria-hidden="true">💬</span><img class="sergio-avatar hidden" alt="Avatar do Sérgio" /> Sérgio — Ajuda Digital</h2>
       <button id="sergio-widget-close" class="small-btn" type="button" aria-label="Fechar chat">Fechar ✕</button>
     </header>
     <div id="chat-sergio" class="chat-sergio" aria-live="polite"></div>

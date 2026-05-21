@@ -56,3 +56,16 @@ h1 { margin: 8px 0; font-size: 1.7rem; color: var(--vinho); }
   .btn { font-size: 1.05rem; }
   .sergio-widget { right: 8px; bottom: 98px; width: calc(100vw - 16px); }
 }
+.sergio-widget-toggle { display:flex; align-items:center; justify-content:center; overflow:hidden; }
+.sergio-avatar { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; border: 2px solid #fff; }
+.sergio-widget-toggle .sergio-avatar { width: 70px; height: 70px; border-width: 0; }
+.sergio-widget-header h2 { display:flex; align-items:center; gap:8px; }
+.msg-assistant { align-items:flex-start; gap:8px; }
+.sergio-msg-avatar { width: 34px; height:34px; border-radius:50%; background:#fff3b7; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.btn-ouvir { margin-top: 10px; font-size: 1rem; }
+#btn-sergio-mic { background: #1f4f96; }
+.chips-wrap { display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
+.chip-sergio { border:2px solid #7b2d26; background:#fff; color:#1f1f1f; border-radius:999px; padding:10px 14px; font-size:1rem; font-weight:700; }
+.chip-sergio.secundario { border-color:#1d8f4e; }
+.duvidas-comuns { margin-top: 14px; border:2px solid #d9d9d9; border-radius:12px; padding:10px; background:#fff; }
+.duvidas-comuns h3 { margin:0; color:#7b2d26; }

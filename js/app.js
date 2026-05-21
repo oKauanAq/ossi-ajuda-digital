@@ -3,6 +3,27 @@ let CATEGORIAS = [];
 let sergioRequestId = 0;
 const STORAGE_SERGIO = 'ossi-sergio-chat';
 const historicoSergio = [];
+let avatarSergio = '';
+
+const OPCOES_RAPIDAS = [
+  { label: '📱 Ajuda com celular', pergunta: 'Preciso de ajuda com meu celular.' },
+  { label: '🟢 WhatsApp', pergunta: 'Estou com dúvida no WhatsApp.' },
+  { label: '💳 Pix ou banco', pergunta: 'Tenho uma dúvida sobre Pix ou banco e quero fazer com segurança.' },
+  { label: '🛡️ Acho que é golpe', pergunta: 'Acho que estou passando por um golpe. O que devo fazer?' },
+  { label: '🔐 Senha ou conta', pergunta: 'Tenho uma dúvida sobre senha ou recuperação de conta.' },
+  { label: '🛒 Verificar loja ou site', pergunta: 'Quero saber se uma loja ou site parece confiável.' },
+  { label: '📝 Dúvida do dia a dia', pergunta: 'Tenho uma dúvida do dia a dia.' }
+];
+
+const DUVIDAS_COMUNS = [
+  'Como aumentar o volume?',
+  'Como mandar mensagem no WhatsApp?',
+  'Recebi um link estranho.',
+  'Me pediram Pix urgente.',
+  'Esqueci minha senha.',
+  'Como saber se uma loja é confiável?',
+  'Como colocar foto no WhatsApp?'
+];
 
 function mostrar(secaoId) {
   document.querySelectorAll('main .card').forEach((el) => {
@@ -36,12 +57,32 @@ function restaurarHistorico() {
   } catch {}
 }
 
+function renderChips(perguntas, classe = '') {
+  return perguntas.map((item) => `<button type="button" class="chip-sergio ${classe}" data-question="${item.pergunta || item}">${item.label || item}</button>`).join('');
+}
+
 function renderChatSergio() {
   const chat = document.getElementById('chat-sergio');
+
+  if (!historicoSergio.length) {
+    chat.innerHTML = `
+      <div class="chat-boas-vindas">
+        <p class="resposta-destaque">Olá! Escolha uma opção para começar:</p>
+        <div class="chips-wrap">${renderChips(OPCOES_RAPIDAS)}</div>
+      </div>
+      <div class="duvidas-comuns">
+        <h3>Dúvidas comuns</h3>
+        <div class="chips-wrap">${renderChips(DUVIDAS_COMUNS, 'secundario')}</div>
+      </div>`;
+    chat.scrollTop = 0;
+    return;
+  }
+
   chat.innerHTML = historicoSergio.map((msg) => {
     if (msg.role === 'user') return `<div class="msg msg-user"><p>${msg.content}</p></div>`;
     const bloco = msg.respostaEstruturada ? montarResposta(msg.respostaEstruturada, msg.contextoPergunta).html : `<div class="bloco-sergio"><p class="resposta-destaque">${msg.content}</p></div>`;
-    return `<div class="msg msg-assistant">${bloco}</div>`;
+    const avatarHtml = avatarSergio ? `<img src="${avatarSergio}" class="sergio-avatar" alt="Avatar do Sérgio" />` : '👨‍🏫';
+    return `<div class="msg msg-assistant"><span class="sergio-msg-avatar" aria-hidden="true">${avatarHtml}</span>${bloco}</div>`;
   }).join('');
   chat.scrollTop = chat.scrollHeight;
 }
@@ -67,10 +108,16 @@ function initSergio(widgetApi) {
   const botao = document.getElementById('btn-sergio');
   const campo = document.getElementById('pergunta-sergio');
   const botaoLimpar = document.getElementById('btn-limpar-sergio');
+  const chat = document.getElementById('chat-sergio');
 
   restaurarHistorico();
   renderChatSergio();
   initMicrofone(campo);
+
+  const enviarPerguntaDireta = async (perguntaDireta) => {
+    campo.value = perguntaDireta;
+    await enviarPergunta();
+  };
 
   const enviarPergunta = async () => {
     const pergunta = campo.value.trim();
@@ -123,6 +170,12 @@ function initSergio(widgetApi) {
     }
   });
 
+  chat.addEventListener('click', (event) => {
+    const target = event.target.closest('[data-question]');
+    if (!target) return;
+    enviarPerguntaDireta(target.dataset.question || '');
+  });
+
   botaoLimpar.addEventListener('click', () => {
     historicoSergio.splice(0, historicoSergio.length);
     localStorage.removeItem(STORAGE_SERGIO);
@@ -132,9 +185,30 @@ function initSergio(widgetApi) {
   document.querySelectorAll('[data-action="abrir-chat"]').forEach((btn) => btn.addEventListener('click', () => widgetApi.alternarWidget(true)));
   document.querySelectorAll('[data-action="pergunta-rapida"]').forEach((btn) => btn.addEventListener('click', () => {
     widgetApi.alternarWidget(true);
-    campo.value = btn.dataset.question || '';
+    if (btn.dataset.question) {
+      enviarPerguntaDireta(btn.dataset.question);
+      return;
+    }
     campo.focus();
   }));
+}
+
+
+async function configurarAvatarSergio() {
+  const caminhoAvatar = 'assets/sergio-avatar.png';
+  try {
+    const resp = await fetch(caminhoAvatar, { method: 'HEAD' });
+    if (!resp.ok) throw new Error('sem avatar');
+    avatarSergio = caminhoAvatar;
+    document.querySelectorAll('.sergio-avatar').forEach((img) => {
+      img.src = caminhoAvatar;
+      img.classList.remove('hidden');
+    });
+    document.querySelectorAll('.avatar-fallback').forEach((el) => el.classList.add('hidden'));
+    document.querySelectorAll('.sergio-msg-avatar').forEach((el) => {
+      el.innerHTML = `<img src="${caminhoAvatar}" class="sergio-avatar" alt="Avatar do Sérgio" />`;
+    });
+  } catch (_) {}
 }
 
 async function carregarDados() {
@@ -144,6 +218,7 @@ async function carregarDados() {
 
 async function init() {
   await carregarDados();
+  await configurarAvatarSergio();
   initNavegacao();
   initFaq();
   const widgetApi = initWidgetSergio();
