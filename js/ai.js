@@ -15,14 +15,14 @@ function normalizarRespostaIA(payload = {}) {
   };
 }
 
-async function perguntarIA(pergunta, timeoutMs = 10000) {
+async function perguntarIA(pergunta, historico = [], timeoutMs = 10000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const resposta = await fetch('/api/sergio', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pergunta }),
+      body: JSON.stringify({ pergunta, historico }),
       signal: controller.signal
     });
     if (!resposta.ok) throw new Error('api_error');

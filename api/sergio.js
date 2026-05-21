@@ -13,9 +13,8 @@ const TIPOS_PUBLICOS = {
   fallback: 'fallback'
 };
 
-function normalizarTexto(texto = '') {
-  return texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
-}
+function normalizarTexto(texto = '') { return texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim(); }
+function temDadoPessoal(texto = '') { return /(senha|cpf|cartao|cartao|documento|rg|codigo|token|pix|dados bancarios)/i.test(String(texto)); }
 
 function respostaPadrao(resposta = {}, defaults = {}) {
   return {
@@ -25,8 +24,7 @@ function respostaPadrao(resposta = {}, defaults = {}) {
     quandoPedirAjuda: String(resposta.quandoPedirAjuda || defaults.quandoPedirAjuda || 'Peça ajuda se tiver dúvida.')
   };
 }
-
-function pacote(tipo, resposta, origem) { return { tipo, resposta, origem }; }
+const pacote = (tipo, resposta, origem) => ({ tipo, resposta, origem });
 
 function classificarIntencao(pergunta) {
   const t = normalizarTexto(pergunta);
@@ -44,10 +42,7 @@ function classificarIntencao(pergunta) {
 }
 
 function respostaSeguranca(tipoInterno) {
-  const base = {
-    atencao: 'Nunca passe senha, código, CPF, cartão, documento ou dados bancários.',
-    quandoPedirAjuda: 'Se houver risco, pedido de dinheiro ou dúvida, peça ajuda a alguém de confiança ou à equipe da OSSI.'
-  };
+  const base = { atencao: 'Nunca passe senha, código, CPF, cartão, documento ou dados bancários.', quandoPedirAjuda: 'Se houver risco, pedido de dinheiro ou dúvida, peça ajuda a alguém de confiança ou à equipe da OSSI.' };
   const map = {
     seguranca_senha_recuperacao: { respostaSimples: 'Você pode recuperar a conta com segurança.', passoAPasso: ['Use "Esqueci minha senha" no app ou site oficial.', 'Não passe código para ninguém.', 'Não clique em link enviado por desconhecido.', 'Se pedirem pagamento ou código, pare e peça ajuda.'] },
     seguranca_codigo_token: { respostaSimples: 'Código de verificação é secreto.', passoAPasso: ['Nunca compartilhe código ou token.', 'Digite código só no app oficial aberto por você.', 'Se recebeu sem pedir, troque a senha.', 'Ative verificação em duas etapas.'] },
@@ -70,24 +65,18 @@ function parseIA(raw = '') {
   const text = String(raw).replace(/```json/gi, '').replace(/```/g, '').trim();
   const i = text.indexOf('{'); const f = text.lastIndexOf('}');
   const candidates = [text, (i >= 0 && f > i) ? text.slice(i, f + 1) : ''];
-  for (const c of candidates) {
-    if (!c) continue;
-    try { return respostaPadrao(JSON.parse(c)); } catch {}
-  }
+  for (const c of candidates) { if (!c) continue; try { return respostaPadrao(JSON.parse(c)); } catch {} }
   return respostaPadrao({ respostaSimples: text.slice(0, 260), passoAPasso: ['Siga com calma.', 'Se houver risco, pare e peça ajuda.'] });
 }
 
-async function chamarNvidia(pergunta, contextoFaq, intencao) {
-  const system = 'Você é Sérgio, uma IA assistente acolhedora para idosos da OSSI. Você ajuda com dúvidas gerais do dia a dia e inclusão digital. A biblioteca interna é apoio, não limite. Responda em português do Brasil com frases curtas, simples e passo a passo quando útil. Nunca peça senha, CPF, cartão, código, documento ou dados bancários. Responda SEMPRE em JSON com: respostaSimples, passoAPasso, atencao, quandoPedirAjuda.';
+async function chamarNvidia(pergunta, contextoFaq, intencao, historicoSeguro) {
+  const system = 'Você é Sérgio, um chatbot de IA acolhedor para idosos da OSSI. Converse de forma simples, paciente e segura. Você pode responder dúvidas gerais do dia a dia, mas tem especialidade em inclusão digital, celular, internet, aplicativos, mensagens e segurança contra golpes. Use o histórico da conversa para manter contexto. A biblioteca interna é apoio, não limite. Nunca peça senha, CPF, cartão, código, documento ou dados bancários. Se houver risco, oriente parar e pedir ajuda. Responda SEMPRE em JSON com: respostaSimples, passoAPasso, atencao, quandoPedirAjuda.';
   const payload = {
     model: MODELO_NVIDIA,
     temperature: 0.2,
     max_tokens: 700,
     extra_body: { chat_template_kwargs: { enable_thinking: false } },
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: `Intenção: ${intencao}\nPergunta: ${pergunta}\nContexto FAQ (apoio): ${JSON.stringify(contextoFaq)}` }
-    ]
+    messages: [{ role: 'system', content: system }, { role: 'user', content: `Intenção: ${intencao}\nHistórico recente: ${JSON.stringify(historicoSeguro)}\nPergunta atual: ${pergunta}\nContexto FAQ (apoio): ${JSON.stringify(contextoFaq)}` }]
   };
   const resp = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', { method: 'POST', headers: { Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   if (!resp.ok) throw new Error('nvidia_http');
@@ -98,27 +87,20 @@ async function chamarNvidia(pergunta, contextoFaq, intencao) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
   const pergunta = String(req.body?.pergunta || '');
+  const historico = Array.isArray(req.body?.historico) ? req.body.historico : [];
   if (!pergunta.trim()) return res.status(400).json({ error: 'Pergunta inválida.' });
 
   const intencao = classificarIntencao(pergunta);
-  if (intencao === 'saudacao_ou_vaga') {
-    return res.status(200).json(pacote(TIPOS_PUBLICOS.saudacao_ou_vaga, respostaPadrao({ respostaSimples: 'Boa! Eu sou o Sérgio. Me diga no que você precisa de ajuda.', passoAPasso: ['Escreva sua dúvida em uma frase simples.', 'Se puder, diga o que apareceu na tela.', 'Eu te explico passo a passo.'], atencao: 'Não compartilhe dados pessoais.', quandoPedirAjuda: 'Se envolver dinheiro ou risco de golpe, peça ajuda.' }), 'local'));
-  }
-  if (intencao === 'consulta_loja_site_confiavel') {
-    return res.status(200).json(pacote(TIPOS_PUBLICOS.consulta_loja_site, respostaPadrao({ respostaSimples: 'Eu ainda não consulto a internet em tempo real.', passoAPasso: ['Confira o endereço do site.', 'Procure CNPJ e contato.', 'Pesquise no Reclame Aqui e no Google.', 'Desconfie de preço muito baixo.', 'Evite Pix se estiver inseguro.', 'Peça ajuda antes de comprar.'] }), 'seguranca'));
-  }
+  if (intencao === 'saudacao_ou_vaga') return res.status(200).json(pacote(TIPOS_PUBLICOS.saudacao_ou_vaga, respostaPadrao({ respostaSimples: 'Boa! Eu sou o Sérgio. Me diga no que você precisa de ajuda.', passoAPasso: ['Escreva sua dúvida em uma frase simples.', 'Se puder, diga o que apareceu na tela.', 'Eu te explico passo a passo.'], atencao: 'Não compartilhe dados pessoais.', quandoPedirAjuda: 'Se envolver dinheiro ou risco de golpe, peça ajuda.' }), 'local'));
+  if (intencao === 'consulta_loja_site_confiavel') return res.status(200).json(pacote(TIPOS_PUBLICOS.consulta_loja_site, respostaPadrao({ respostaSimples: 'Eu ainda não consulto a internet em tempo real.', passoAPasso: ['Confira o endereço do site.', 'Procure CNPJ e contato.', 'Pesquise no Reclame Aqui e no Google.', 'Desconfie de preço muito baixo.', 'Evite Pix se estiver inseguro.', 'Peça ajuda antes de comprar.'] }), 'seguranca'));
+  if (intencao.startsWith('seguranca_') || ['documento_dados_pessoais', 'saude'].includes(intencao)) return res.status(200).json(pacote(TIPOS_PUBLICOS.seguranca, respostaSeguranca(intencao), 'seguranca'));
 
-  if (intencao.startsWith('seguranca_') || ['documento_dados_pessoais', 'saude'].includes(intencao)) {
-    return res.status(200).json(pacote(TIPOS_PUBLICOS.seguranca, respostaSeguranca(intencao), 'seguranca'));
-  }
-
-  if (!process.env.NVIDIA_API_KEY) {
-    return res.status(200).json(pacote(TIPOS_PUBLICOS.fallback, respostaPadrao({ respostaSimples: 'No momento estou no modo local. Na versão Vercel eu também respondo com IA.', passoAPasso: ['Faça a pergunta com mais detalhes.', 'Posso usar minha biblioteca local para te orientar.'] }), 'local'));
-  }
+  if (!process.env.NVIDIA_API_KEY) return res.status(200).json(pacote(TIPOS_PUBLICOS.fallback, respostaPadrao({ respostaSimples: 'No momento estou no modo local. Na versão Vercel eu também respondo com IA.', passoAPasso: ['Faça a pergunta com mais detalhes.', 'Posso usar minha biblioteca local para te orientar.'] }), 'local'));
 
   try {
     const contexto = buscarContextoFaq(pergunta);
-    const resposta = await chamarNvidia(pergunta, contexto, intencao);
+    const historicoSeguro = historico.slice(-6).filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && !temDadoPessoal(m.content)).map((m) => ({ role: m.role, content: m.content.slice(0, 280) }));
+    const resposta = await chamarNvidia(pergunta, contexto, intencao, historicoSeguro);
     const tipo = intencao === 'duvida_digital' ? TIPOS_PUBLICOS.duvida_digital : TIPOS_PUBLICOS.duvida_geral;
     return res.status(200).json(pacote(tipo, resposta, contexto.length ? 'faq' : 'ia'));
   } catch {

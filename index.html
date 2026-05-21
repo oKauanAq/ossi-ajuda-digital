@@ -39,10 +39,12 @@
 
     <section id="sergio" class="card hidden">
       <h2>Assistente Sérgio</h2>
-      <label for="pergunta-sergio">Escreva sua dúvida:</label>
-      <input id="pergunta-sergio" type="text" placeholder="Ex.: Recebi link no WhatsApp" />
-      <button id="btn-sergio" class="btn">Perguntar ao Sérgio</button>
-      <div id="resposta-sergio"></div>
+      <div id="chat-sergio" class="chat-sergio" aria-live="polite"></div>
+      <div class="chat-acoes">
+        <input id="pergunta-sergio" type="text" placeholder="Ex.: Recebi link no WhatsApp" />
+        <button id="btn-sergio" class="btn">Enviar</button>
+      </div>
+      <button id="btn-limpar-sergio" class="small-btn" type="button">Limpar conversa</button>
     </section>
 
     <section id="seguranca" class="card hidden">
