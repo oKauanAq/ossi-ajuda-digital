@@ -2,6 +2,37 @@ let FAQ = [];
 let CATEGORIAS = [];
 let sergioRequestId = 0;
 const STORAGE_SERGIO = 'ossi-sergio-chat';
+
+const STORAGE_AVALIACAO = 'ossi-avaliacao-local';
+let avaliacaoSelecionada = '';
+
+function initAvaliacao() {
+  const opcoes = document.querySelectorAll('.avaliacao-opcao');
+  const botaoSalvar = document.getElementById('salvar-avaliacao');
+  const sugestao = document.getElementById('avaliacao-sugestao');
+  const status = document.getElementById('avaliacao-status');
+
+  opcoes.forEach((opcao) => opcao.addEventListener('click', () => {
+    avaliacaoSelecionada = opcao.dataset.avaliacao || '';
+    opcoes.forEach((item) => item.setAttribute('aria-pressed', item === opcao ? 'true' : 'false'));
+    if (status) status.textContent = '';
+  }));
+
+  botaoSalvar?.addEventListener('click', () => {
+    if (!avaliacaoSelecionada) {
+      status.textContent = 'Escolha uma opção de avaliação antes de salvar.';
+      return;
+    }
+    const payload = {
+      avaliacao: avaliacaoSelecionada,
+      sugestao: (sugestao?.value || '').trim(),
+      salvoEm: new Date().toISOString()
+    };
+    localStorage.setItem(STORAGE_AVALIACAO, JSON.stringify(payload));
+    status.textContent = 'Obrigado! Sua avaliação ficou registrada neste aparelho.';
+  });
+}
+
 const historicoSergio = [];
 let avatarSergio = '';
 
@@ -96,7 +127,7 @@ function initSergio() {
 
 async function configurarAvatarSergio() { try { const caminhoAvatar = 'assets/sergio-avatar.png'; const resp = await fetch(caminhoAvatar, { method: 'HEAD' }); if (!resp.ok) throw new Error(); avatarSergio = caminhoAvatar; document.querySelectorAll('.sergio-avatar').forEach((img) => { img.src = caminhoAvatar; img.classList.remove('hidden'); }); document.querySelectorAll('.avatar-fallback').forEach((el) => el.classList.add('hidden')); } catch (_) {} }
 async function carregarDados() { FAQ = await fetch('data/faq.json').then((r) => r.json()); CATEGORIAS = await fetch('data/categorias.json').then((r) => r.json()); }
-async function init() { await carregarDados(); await configurarAvatarSergio(); initNavegacao(); initAcoesHome(); initWidgetSergio(); initFaq(); initOpcoesRapidas(); initSergio(); }
+async function init() { await carregarDados(); await configurarAvatarSergio(); initNavegacao(); initAcoesHome(); initWidgetSergio(); initFaq(); initAvaliacao(); initOpcoesRapidas(); initSergio(); }
 
 if ('serviceWorker' in navigator) window.addEventListener('load', async () => { const reg = await navigator.serviceWorker.register('service-worker.js'); reg.addEventListener('updatefound', () => document.getElementById('sw-update-msg')?.classList.remove('hidden')); });
 init();
