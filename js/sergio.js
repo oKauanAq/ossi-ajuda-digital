@@ -49,7 +49,8 @@ function sanitizarResposta(item = {}) {
     respostaSimples: limparCampoRender(item.respostaSimples),
     passoAPasso: passos.map((p) => limparCampoRender(p)).filter(Boolean).slice(0, 6),
     atencao: limparCampoRender(item.atencao),
-    quandoPedirAjuda: limparCampoRender(item.quandoPedirAjuda)
+    quandoPedirAjuda: limparCampoRender(item.quandoPedirAjuda),
+    opcoesFluxo: Array.isArray(item.opcoesFluxo) ? item.opcoesFluxo.map((o) => limparCampoRender(o)).filter(Boolean).slice(0, 8) : []
   };
   const primeiroPasso = normalizarTexto(resposta.passoAPasso[0] || '');
   const respostaNorm = normalizarTexto(resposta.respostaSimples);
@@ -60,12 +61,12 @@ function sanitizarResposta(item = {}) {
 function detectarApoioVisual(resposta = '', pergunta = '', tipo = '') {
   const base = normalizarTexto(`${resposta} ${pergunta} ${tipo}`);
   const regras = [
-    { termos: ['volume', 'som', 'audio'], emoji: '📱🔊', titulo: 'Botões de volume' },
+    { termos: ['volume', 'som', 'audio', 'wifi', 'wi-fi', 'print', 'celular'], emoji: '📱', titulo: 'Celular' },
     { termos: ['whatsapp'], emoji: '🟢', titulo: 'WhatsApp' },
-    { termos: ['facebook', 'messenger', 'mensagem'], emoji: '💬', titulo: 'Mensagens' },
+    { termos: ['facebook', 'messenger'], emoji: '💬', titulo: 'Facebook/Messenger' },
     { termos: ['golpe', 'link', 'suspeito', 'urgente'], emoji: '🛡️', titulo: 'Cuidado com golpe' },
-    { termos: ['pix', 'banco', 'dinheiro'], emoji: '💳', titulo: 'Atenção com dinheiro' },
-    { termos: ['senha', 'conta', 'codigo'], emoji: '🔐', titulo: 'Segurança da conta' },
+    { termos: ['senha', 'conta', 'login', 'codigo'], emoji: '🔐', titulo: 'Senha e conta' },
+    { termos: ['pix', 'banco', 'dinheiro'], emoji: '💳', titulo: 'Banco e Pix' },
     { termos: ['loja', 'site', 'compra'], emoji: '🛒', titulo: 'Verifique antes de comprar' },
     { termos: ['receita', 'dia a dia', 'cozinha'], emoji: '📝', titulo: 'Dica do dia a dia' }
   ];
@@ -76,6 +77,7 @@ function montarResposta(item, pergunta = '') {
   const limpo = sanitizarResposta(item);
   const apoio = detectarApoioVisual(limpo.respostaSimples, pergunta, item.categoria || '');
   const passosHtml = limpo.passoAPasso.length ? limpo.passoAPasso.map((p, i) => `<div class="passo-card"><span class="passo-numero">${i + 1}</span><span class="passo-texto">${escaparHtml(p)}</span></div>`).join('') : '';
+  const opcoesHtml = limpo.opcoesFluxo.length ? `<div class="chips-sergio-fluxo">${limpo.opcoesFluxo.map((opcao) => `<button type="button" class="chip-sergio" data-flow-option="${escaparHtml(opcao)}">${escaparHtml(opcao)}</button>`).join('')}</div>` : '';
   const texto = `Resposta simples: ${limpo.respostaSimples}\n${limpo.passoAPasso.length ? `Passo a passo: ${limpo.passoAPasso.join(' ')}\n` : ''}${limpo.atencao ? `Atenção: ${limpo.atencao}\n` : ''}${limpo.quandoPedirAjuda ? `Quando pedir ajuda: ${limpo.quandoPedirAjuda}` : ''}`.trim();
   return {
     html: `<div class="bloco-sergio">
@@ -84,6 +86,7 @@ function montarResposta(item, pergunta = '') {
       ${passosHtml ? `<div class="passos-sergio">${passosHtml}</div>` : ""}
       ${limpo.atencao ? `<p class="caixa-atencao"><strong>Atenção:</strong> ${escaparHtml(limpo.atencao)}</p>` : ""}
       ${limpo.quandoPedirAjuda ? `<p class="caixa-ajuda"><strong>Quando pedir ajuda:</strong> ${escaparHtml(limpo.quandoPedirAjuda)}</p>` : ""}
+      ${opcoesHtml}
     </div>`,
     texto
   };

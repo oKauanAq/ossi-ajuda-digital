@@ -54,7 +54,7 @@ const FLUXOS_GUIADOS = {
   whatsapp: { usuario: 'Dúvida no WhatsApp', resposta: 'Posso ajudar com o WhatsApp. Escolha uma opção ou escreva sua dúvida.', opcoes: ['Como mandar mensagem no WhatsApp?', 'Como colocar foto no WhatsApp?', 'Recebi um link estranho no WhatsApp.', 'Alguém pediu dinheiro no WhatsApp.', 'Quero escrever minha dúvida.'] },
   pix_banco: { usuario: 'Banco e Pix com segurança', resposta: 'Vamos falar de banco e Pix com cuidado. Escolha uma opção antes de fazer qualquer pagamento.', opcoes: ['Como fazer Pix?', 'Me pediram Pix urgente.', 'Como saber se é golpe?', 'Quero verificar uma loja ou site.', 'Quero escrever minha dúvida.'] },
   golpe: { usuario: 'Estou com medo de golpe', resposta: 'Vamos com calma. Se você acha que é golpe, não clique em nada e não envie dinheiro.', opcoes: ['Recebi um link estranho.', 'Número desconhecido me chamou.', 'Estão usando foto de familiar.', 'Me pediram Pix urgente.', 'Quero escrever o que aconteceu.'] },
-  senha_conta: { usuario: 'Senha ou conta', resposta: 'Posso ajudar com conta e senha. Nunca envie sua senha ou código para ninguém.', opcoes: ['Esqueci minha senha.', 'Não consigo entrar no Facebook.', 'Minha conta foi bloqueada.', 'Recebi código no celular.', 'Quero escrever minha dúvida.'] },
+  senha_conta: { usuario: 'Senha ou conta', resposta: 'Posso ajudar com senha ou conta. Primeiro escolha onde está o problema.', opcoes: ['Facebook', 'Instagram', 'Gov.br', 'Banco', 'E-mail', 'Outro aplicativo'] },
   loja_site: { usuario: 'Verificar loja ou site', resposta: 'Antes de comprar, vamos verificar sinais de segurança.', opcoes: ['Como saber se uma loja é confiável?', 'O preço está muito barato.', 'Querem pagamento por Pix.', 'Recebi um link de compra.', 'Quero escrever minha dúvida.'] },
   dia_a_dia: { usuario: 'Dúvida do dia a dia', resposta: 'Pode me perguntar. Vou tentar explicar de um jeito simples.', opcoes: ['O que é anime?', 'O que é mangá?', 'Como pesquisar no Google?', 'Quero escrever minha dúvida.'] }
 };
@@ -115,6 +115,32 @@ function iniciarFluxoGuiado(tipo) {
   salvarHistorico();
 }
 
+
+
+function mapearOpcaoFluxoParaPergunta(opcao = '') {
+  const mapa = {
+    'facebook': 'Esqueci a senha do Facebook',
+    'instagram': 'Esqueci a senha do Instagram',
+    'gov.br': 'Esqueci a senha do Gov.br',
+    'banco': 'Esqueci a senha do aplicativo do banco',
+    'e-mail': 'Esqueci a senha do e-mail',
+    'email': 'Esqueci a senha do e-mail',
+    'whatsapp': 'Estou com dúvida no WhatsApp',
+    'entrar no app': 'Não consigo entrar no app do banco',
+    'fazer pix': 'Como fazer Pix?',
+    'ver saldo': 'Como ver saldo no aplicativo do banco?',
+    'mandar mensagem': 'Como mandar mensagem no WhatsApp?',
+    'colocar foto': 'Como colocar foto no WhatsApp?',
+    'recuperar conta': 'Esqueci minha senha',
+    'verificar golpe': 'Acho que estou passando por um golpe. O que devo fazer?',
+    'volume': 'Como aumentar o volume?',
+    'wi‑fi': 'Como conectar no Wi-Fi?',
+    'wi-fi': 'Como conectar no Wi-Fi?',
+    'print': 'Como tirar print?',
+    'celular sem som': 'Meu celular está sem som.'
+  };
+  return mapa[normalizarTexto(opcao)] || '';
+}
 
 function setChatAberto(aberto) {
   const widget = document.getElementById('sergio-widget');
@@ -187,7 +213,7 @@ function initSergio() {
   };
   botao.addEventListener('click', enviarPergunta);
   campo.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); enviarPergunta(); } });
-  document.getElementById('sergio-widget').addEventListener('click', (event) => { const target = event.target.closest('[data-question]'); if (!target) return; fecharPaineisOpcoes(); const perguntaChip = target.dataset.question || ''; if (normalizarTexto(perguntaChip).includes('quero escrever')) { campo.focus(); return; } enviarPerguntaDireta(perguntaChip); });
+  document.getElementById('sergio-widget').addEventListener('click', (event) => { const targetPergunta = event.target.closest('[data-question]'); const targetFluxo = event.target.closest('[data-flow-option]'); if (!targetPergunta && !targetFluxo) return; fecharPaineisOpcoes(); const opcaoFluxo = targetFluxo?.dataset.flowOption || ''; if (opcaoFluxo) { if (normalizarTexto(opcaoFluxo).includes('outro aplicativo') || normalizarTexto(opcaoFluxo).includes('outro problema') || normalizarTexto(opcaoFluxo).includes('outro assunto')) { campo.focus(); return; } const perguntaMapeada = mapearOpcaoFluxoParaPergunta(opcaoFluxo); if (perguntaMapeada) { enviarPerguntaDireta(perguntaMapeada); return; } enviarPerguntaDireta(opcaoFluxo); return; } const perguntaChip = targetPergunta.dataset.question || ''; if (normalizarTexto(perguntaChip).includes('quero escrever')) { campo.focus(); return; } enviarPerguntaDireta(perguntaChip); });
   botaoLimpar.addEventListener('click', () => { historicoSergio.splice(0, historicoSergio.length); localStorage.removeItem(STORAGE_SERGIO); renderChatSergio(); });
   if (pendingSergioAction?.tipo === 'pergunta') { enviarPerguntaDireta(pendingSergioAction.valor || ''); pendingSergioAction = null; }
 }
