@@ -49,7 +49,10 @@ const OPCOES_RAPIDAS = [
 const DUVIDAS_COMUNS = ['Como aumentar o volume?', 'Como mandar mensagem no WhatsApp?', 'Recebi um link estranho.', 'Me pediram Pix urgente.', 'Esqueci minha senha.', 'Como saber se uma loja é confiável?', 'Como colocar foto no WhatsApp?'];
 
 function mostrar(secaoId) { document.querySelectorAll('main .card[id]').forEach((el) => el.classList.add('hidden')); if (secaoId) document.getElementById(secaoId)?.classList.remove('hidden'); }
-function renderFaq(lista, elId = 'faq-lista') { const wrap = document.getElementById(elId); wrap.innerHTML = lista.map((item) => `<article class="item-faq"><h4>${item.pergunta}</h4>${montarResposta(item).html}</article>`).join(''); }
+function renderFaq(lista, elId = 'faq-lista') {
+  const wrap = document.getElementById(elId);
+  wrap.innerHTML = lista.map((item, idx) => `<details class="item-faq"><summary id="faq-pergunta-${idx}">${escaparHtml(item.pergunta)}</summary><div class="faq-resposta">${montarResposta(item).html}</div></details>`).join('');
+}
 function initNavegacao() { document.querySelectorAll('[data-target]').forEach((btn) => btn.addEventListener('click', () => mostrar(btn.dataset.target))); }
 
 function initAcoesHome() {

@@ -45,12 +45,16 @@ function limparCampoRender(texto = '') {
 
 function sanitizarResposta(item = {}) {
   const passos = Array.isArray(item.passoAPasso) ? item.passoAPasso : String(item.passoAPasso || '').split(/\n|\s*\d+[).:-]\s*/);
-  return {
+  const resposta = {
     respostaSimples: limparCampoRender(item.respostaSimples),
     passoAPasso: passos.map((p) => limparCampoRender(p)).filter(Boolean).slice(0, 6),
     atencao: limparCampoRender(item.atencao),
     quandoPedirAjuda: limparCampoRender(item.quandoPedirAjuda)
   };
+  const primeiroPasso = normalizarTexto(resposta.passoAPasso[0] || '');
+  const respostaNorm = normalizarTexto(resposta.respostaSimples);
+  if (primeiroPasso && respostaNorm && (primeiroPasso.includes(respostaNorm) || respostaNorm.includes(primeiroPasso))) resposta.passoAPasso = resposta.passoAPasso.slice(1);
+  return resposta;
 }
 
 function detectarApoioVisual(resposta = '', pergunta = '', tipo = '') {
@@ -71,13 +75,13 @@ function detectarApoioVisual(resposta = '', pergunta = '', tipo = '') {
 function montarResposta(item, pergunta = '') {
   const limpo = sanitizarResposta(item);
   const apoio = detectarApoioVisual(limpo.respostaSimples, pergunta, item.categoria || '');
-  const passosHtml = limpo.passoAPasso.length ? limpo.passoAPasso.map((p, i) => `<li><span class="passo-numero">${i + 1}</span><span>${escaparHtml(p)}</span></li>`).join('') : '';
+  const passosHtml = limpo.passoAPasso.length ? limpo.passoAPasso.map((p, i) => `<div class="passo-card"><span class="passo-numero">${i + 1}</span><span class="passo-texto">${escaparHtml(p)}</span></div>`).join('') : '';
   const texto = `Resposta simples: ${limpo.respostaSimples}\n${limpo.passoAPasso.length ? `Passo a passo: ${limpo.passoAPasso.join(' ')}\n` : ''}${limpo.atencao ? `Atenção: ${limpo.atencao}\n` : ''}${limpo.quandoPedirAjuda ? `Quando pedir ajuda: ${limpo.quandoPedirAjuda}` : ''}`.trim();
   return {
     html: `<div class="bloco-sergio">
       ${apoio ? `<div class="apoio-visual" data-asset-path="assets/guias/"><strong>${apoio.emoji}</strong><span>${escaparHtml(apoio.titulo)}</span></div>` : ''}
       <p class="resposta-destaque">${escaparHtml(limpo.respostaSimples)}</p>
-      ${passosHtml ? `<ol class="passos-sergio">${passosHtml}</ol>` : ""}
+      ${passosHtml ? `<div class="passos-sergio">${passosHtml}</div>` : ""}
       ${limpo.atencao ? `<p class="caixa-atencao"><strong>Atenção:</strong> ${escaparHtml(limpo.atencao)}</p>` : ""}
       ${limpo.quandoPedirAjuda ? `<p class="caixa-ajuda"><strong>Quando pedir ajuda:</strong> ${escaparHtml(limpo.quandoPedirAjuda)}</p>` : ""}
     </div>`,
