@@ -32,13 +32,28 @@
         <button class="home-card" type="button" data-chat-question="Acho que estou passando por um golpe. O que devo fazer?">🛡️ Estou com medo de golpe</button>
         <button class="home-card" type="button" data-target="faq">❓ Dúvidas frequentes</button>
         <button class="home-card" type="button" data-target="instalar">📲 Instalar no celular</button>
-        <a class="home-card" href="https://forms.gle/" target="_blank" rel="noopener noreferrer">⭐ Avaliar o sistema</a>
+        <button class="home-card" type="button" data-target="avaliar">⭐ Avaliar o sistema</button>
       </div>
     </section>
 
     <section id="instalar" class="card hidden">
       <h2>Adicionar à tela inicial</h2>
       <p>Android: menu &gt; <strong>Adicionar à tela inicial</strong>. iPhone: compartilhar &gt; <strong>Adicionar à Tela de Início</strong>.</p>
+    </section>
+
+
+    <section id="avaliar" class="card hidden" aria-labelledby="avaliar-titulo">
+      <h2 id="avaliar-titulo">Avaliar o sistema</h2>
+      <p>Sua opinião ajuda a melhorar o OSSI Ajuda Digital.</p>
+      <div class="avaliacao-opcoes" role="radiogroup" aria-label="Opções de avaliação">
+        <button type="button" class="avaliacao-opcao" data-avaliacao="Fácil de usar" aria-pressed="false">⭐ Fácil de usar</button>
+        <button type="button" class="avaliacao-opcao" data-avaliacao="Me ajudou" aria-pressed="false">👍 Me ajudou</button>
+        <button type="button" class="avaliacao-opcao" data-avaliacao="Precisa melhorar" aria-pressed="false">🔧 Precisa melhorar</button>
+      </div>
+      <label for="avaliacao-sugestao" class="avaliacao-label">Escreva uma sugestão</label>
+      <textarea id="avaliacao-sugestao" class="avaliacao-sugestao" rows="4" placeholder="Opcional"></textarea>
+      <button id="salvar-avaliacao" class="btn" type="button">Salvar avaliação</button>
+      <p id="avaliacao-status" class="avaliacao-status" role="status" aria-live="polite"></p>
     </section>
 
     <section id="faq" class="card hidden">
