@@ -17,36 +17,53 @@ function normalizarTexto(texto = '') { return texto.toLowerCase().normalize('NFD
 function temDadoPessoal(texto = '') { return /(senha|cpf|cartao|documento|rg|codigo|token|pix|dados bancarios)/i.test(String(texto)); }
 
 function limparCampoResposta(valor = '') {
-  return String(valor).replace(/```json|```/gi, ' ').replace(/[{}\[\]"]/g, ' ').replace(/\\[nrt]/g, ' ').replace(/\\/g, ' ').replace(/\b(resposta\s*simples|respostasimples|passo\s*a\s*passo|passoapasso|atencao|aten[cç][aã]o|quando\s*pedir\s*ajuda|quandopedirajuda)\s*[:=-]?/gi, ' ').replace(/\s+/g, ' ').trim().slice(0, 420);
+  return String(valor).replace(/```json|```/gi, ' ').replace(/[{}\[\]"]/g, ' ').replace(/\\[nrt]/g, ' ').replace(/\\/g, ' ').replace(/\b(resposta\s*simples|respostasimples|passo\s*a\s*passo|passoapasso|atencao|aten[cç][aã]o|quando\s*pedir\s*ajuda|quandopedirajuda)\s*[:=-]?/gi, ' ').replace(/\s+/g, ' ').replace(/,\s*$/, '.').trim().slice(0, 420);
 }
 
 function respostaPadrao(resposta = {}, defaults = {}) {
-  return {
+  const base = {
     respostaSimples: limparCampoResposta(resposta.respostaSimples || defaults.respostaSimples || 'Não consegui entender bem. Pode perguntar de outro jeito?'),
     passoAPasso: Array.isArray(resposta.passoAPasso) ? resposta.passoAPasso.map((p) => limparCampoResposta(p)).filter(Boolean).slice(0, 6) : [],
     atencao: limparCampoResposta(resposta.atencao || defaults.atencao || ''),
     quandoPedirAjuda: limparCampoResposta(resposta.quandoPedirAjuda || defaults.quandoPedirAjuda || '')
   };
+  const primeiroPasso = normalizarTexto(base.passoAPasso[0] || '');
+  const respostaNorm = normalizarTexto(base.respostaSimples);
+  if (primeiroPasso && respostaNorm && (primeiroPasso.includes(respostaNorm) || respostaNorm.includes(primeiroPasso))) base.passoAPasso = base.passoAPasso.slice(1);
+  const atencaoNorm = normalizarTexto(base.atencao);
+  const ajudaNorm = normalizarTexto(base.quandoPedirAjuda);
+  if (atencaoNorm && ajudaNorm && (atencaoNorm.includes(ajudaNorm) || ajudaNorm.includes(atencaoNorm))) base.quandoPedirAjuda = '';
+  return base;
 }
 const pacote = (tipo, resposta, origem) => ({ tipo, resposta, origem });
 
 function temAlgum(t, termos) { return termos.some((x) => t.includes(x)); }
 
+function respostaSegurancaGenerica() {
+  return pacote(TIPOS_PUBLICOS.seguranca, respostaPadrao({
+    respostaSimples: 'Esse assunto envolve segurança. Vamos fazer com calma.',
+    passoAPasso: ['Não clique em links desconhecidos.', 'Não envie senha, código, CPF, cartão ou documento.', 'Não faça Pix nem pagamento com pressa.', 'Abra apenas o aplicativo oficial.', 'Peça ajuda se estiver em dúvida.'],
+    atencao: 'Com pressa é mais fácil cair em golpe.',
+    quandoPedirAjuda: 'Peça ajuda antes de confirmar qualquer pagamento.'
+  }), 'seguranca_local');
+}
+
 function responderHabilidadeLocal(pergunta = '') {
   const t = normalizarTexto(pergunta);
   const habilidades = [
-    { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['aumentar o volume', 'aumentar o som', 'nao escuto', 'celular esta baixo', 'volume do celular'], resposta: { respostaSimples: 'Use os botões de volume na lateral do celular. O botão de cima geralmente aumenta o som.', passoAPasso: ['Pegue o celular na mão.', 'Procure os botões na lateral.', 'Aperte o botão de cima para aumentar.', 'Veja se aparece uma barra de volume na tela.', 'Se ainda estiver baixo, abra Configurações > Som.', 'Peça ajuda se não encontrar.'], atencao: 'Não instale aplicativos prometendo aumentar o volume sem orientação.', quandoPedirAjuda: 'Peça ajuda se o botão não funcionar ou se o celular continuar sem som.' } },
-    { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['foto no whatsapp', 'trocar foto do perfil', 'mudar foto do zap', 'colocar foto no perfil'], resposta: { respostaSimples: 'Você consegue trocar sua foto de perfil do WhatsApp em poucos toques.', passoAPasso: ['Abra o WhatsApp.', 'Toque nos três pontinhos ou em Configurações.', 'Toque no seu nome ou na sua foto.', 'Toque na câmera ou no lápis.', 'Escolha uma foto da galeria.', 'Confirme.'], atencao: 'Evite colocar foto de documento, cartão ou informação pessoal.', quandoPedirAjuda: 'Peça ajuda se não encontrar as opções no seu celular.' } },
-    { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['mandar mensagem no whatsapp', 'enviar mensagem no whatsapp'], resposta: { respostaSimples: 'Você pode enviar mensagem no WhatsApp de forma simples.', passoAPasso: ['Abra o WhatsApp.', 'Toque em uma conversa ou no ícone de nova conversa.', 'Digite a mensagem no campo de texto.', 'Toque na seta de enviar.', 'Confirme se apareceu o tique da mensagem.'], atencao: 'Revise o nome do contato antes de enviar dados importantes.', quandoPedirAjuda: '' } },
-    { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['mandar mensagem no facebook', 'messenger'], resposta: { respostaSimples: 'No Facebook/Messenger, abra a conversa e toque em enviar.', passoAPasso: ['Abra o Messenger ou Facebook.', 'Toque em Conversas ou no ícone de mensagem.', 'Escolha o contato.', 'Digite a mensagem.', 'Toque em Enviar.'], atencao: '', quandoPedirAjuda: 'Peça ajuda se aparecer pedido de código ou dinheiro.' } },
-    { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['esqueci minha senha', 'nao consigo entrar', 'não consigo entrar', 'recuperar conta', 'entrar no face'], resposta: { respostaSimples: 'Use a opção oficial “Esqueci minha senha” no aplicativo ou site.', passoAPasso: ['Abra o app oficial da conta.', 'Toque em “Esqueci minha senha”.', 'Siga a recuperação pelo seu e-mail ou telefone.', 'Crie senha nova forte e diferente.', 'Nunca passe código recebido por SMS para ninguém.'], atencao: 'Nunca informe senha ou código para outra pessoa.', quandoPedirAjuda: 'Peça ajuda se receber link estranho ou pedido de pagamento para recuperar conta.' } },
-    { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['pix urgente', 'pediram pix', 'pedido de dinheiro'], resposta: { respostaSimples: 'Pedido urgente de Pix pode ser golpe.', passoAPasso: ['Pare e não faça o Pix na pressa.', 'Confirme por ligação no número que você já conhece.', 'Não envie código, documento ou foto.', 'Se suspeitar, bloqueie o contato e denuncie.'], atencao: 'Golpistas usam urgência para pressionar.', quandoPedirAjuda: 'Peça ajuda antes de qualquer transferência.' } },
-    { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['link estranho', 'link suspeito'], resposta: { respostaSimples: 'Link estranho pode roubar seus dados.', passoAPasso: ['Não clique no link.', 'Se clicou, não preencha dados.', 'Abra o app oficial digitando o endereço manualmente.', 'Troque sua senha se digitou informações.'], atencao: 'Nunca informe senha, CPF ou cartão em link desconhecido.', quandoPedirAjuda: '' } },
-    { tipo: TIPOS_PUBLICOS.consulta_loja_site, origem: 'seguranca_local', termos: ['loja confiavel', 'site confiavel', 'loja e confiavel', 'site e confiavel'], resposta: { respostaSimples: 'Você pode verificar sinais de confiança antes de comprar.', passoAPasso: ['Confira se o endereço do site está correto.', 'Procure CNPJ, telefone e política de troca.', 'Pesquise o nome da loja no Reclame Aqui.', 'Desconfie de preço muito abaixo do normal.', 'Evite Pix se estiver inseguro.'], atencao: 'Não envie documento para loja desconhecida.', quandoPedirAjuda: 'Peça ajuda antes de pagar se tiver dúvida.' } },
-    { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['numero desconhecido', 'foto de familiar', 'se passando por familiar'], resposta: { respostaSimples: 'Não confie só na foto do perfil.', passoAPasso: ['Pare e não envie dinheiro.', 'Ligue para o familiar no número antigo salvo.', 'Bloqueie se confirmar suspeita.'], atencao: '', quandoPedirAjuda: 'Peça ajuda antes de qualquer transferência.' } },
-    { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['tela inicial', 'instalar o sistema'], resposta: { respostaSimples: 'Você pode adicionar o sistema na tela inicial.', passoAPasso: ['No Android (Chrome), toque nos 3 pontos e em “Adicionar à tela inicial”.', 'No iPhone (Safari), toque em compartilhar e em “Adicionar à Tela de Início”.'], atencao: '', quandoPedirAjuda: '' } },
-    { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['tirar print', 'captura de tela'], resposta: { respostaSimples: 'Para tirar print, use os botões físicos do celular.', passoAPasso: ['Abra a tela que deseja salvar.', 'Aperte ao mesmo tempo botão de ligar + volume para baixo.', 'Procure a imagem na galeria.'], atencao: '', quandoPedirAjuda: '' } },
-    { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['conectar no wifi', 'conectar no wi-fi', 'entrar no wifi'], resposta: { respostaSimples: 'Você pode conectar no Wi-Fi pelas configurações.', passoAPasso: ['Abra Configurações.', 'Toque em Wi‑Fi.', 'Escolha a rede da sua casa.', 'Digite a senha do Wi‑Fi e confirme.'], atencao: 'Evite redes abertas desconhecidas.', quandoPedirAjuda: '' } }
+    { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['aumentar o volume', 'aumentar o som', 'nao escuto', 'celular esta baixo', 'volume do celular'], resposta: { respostaSimples: 'Vamos aumentar o volume com calma.', passoAPasso: ['Pegue o celular na mão.', 'Aperte o botão de cima na lateral.', 'Veja se a barra de volume aparece na tela.', 'Teste o som com um vídeo curto.', 'Se ainda estiver baixo, abra Configurações e toque em Som.', 'Peça ajuda se o botão não funcionar.'], atencao: 'Não instale aplicativo desconhecido para aumentar som.', quandoPedirAjuda: '' } },
+    { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['foto no whatsapp', 'trocar foto do perfil', 'mudar foto do zap', 'colocar foto no perfil'], resposta: { respostaSimples: 'Você pode trocar a foto do WhatsApp em poucos toques.', passoAPasso: ['Abra o WhatsApp.', 'Toque em Configurações.', 'Toque no seu nome ou na sua foto.', 'Toque no ícone de câmera.', 'Escolha uma foto da galeria.', 'Toque em confirmar.'], atencao: 'Evite usar foto com documento ou dados pessoais.', quandoPedirAjuda: '' } },
+    { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['mandar mensagem no whatsapp', 'enviar mensagem no whatsapp'], resposta: { respostaSimples: 'Mandar mensagem no WhatsApp é rápido e simples.', passoAPasso: ['Abra o WhatsApp.', 'Toque na conversa da pessoa.', 'Digite sua mensagem.', 'Toque na seta para enviar.', 'Confirme se a mensagem apareceu na conversa.'], atencao: 'Confira o nome da pessoa antes de enviar informação importante.', quandoPedirAjuda: '' } },
+    { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['esqueci minha senha', 'nao consigo entrar', 'não consigo entrar', 'recuperar conta', 'entrar no face', 'facebook'], resposta: { respostaSimples: 'Se não consegue entrar no Facebook, recupere a conta pelo caminho oficial.', passoAPasso: ['Abra o aplicativo oficial do Facebook.', 'Toque em Esqueci a senha.', 'Digite seu e-mail ou telefone.', 'Siga o código enviado para você.', 'Crie uma senha nova e guarde em local seguro.'], atencao: 'Nunca passe senha ou código para outra pessoa.', quandoPedirAjuda: 'Peça ajuda se aparecer link estranho ou pedido de pagamento.' } },
+    { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['pix urgente', 'pediram pix', 'pedido de dinheiro'], resposta: { respostaSimples: 'Pedido urgente de Pix pode ser golpe.', passoAPasso: ['Pare e respire antes de qualquer pagamento.', 'Confirme por ligação no número que você já conhece.', 'Não envie código, senha, foto ou documento.', 'Não clique em link recebido por mensagem.', 'Se suspeitar, bloqueie o contato e denuncie.'], atencao: 'Golpistas usam urgência para pressionar.', quandoPedirAjuda: 'Peça ajuda antes de qualquer transferência.' } },
+    { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['como fazer pix', 'fazer um pix', 'preciso fazer pix', 'mandar pix', 'enviar pix', 'pagar com pix'], resposta: { respostaSimples: 'Para fazer Pix, use somente o aplicativo oficial do seu banco. Faça com calma e confirme o nome da pessoa antes de pagar.', passoAPasso: ['Abra o aplicativo oficial do seu banco.', 'Toque na opção Pix.', 'Escolha pagar por chave Pix ou QR Code.', 'Digite a chave ou leia o QR Code.', 'Confira o nome da pessoa que vai receber.', 'Confira o valor e só confirme se tiver certeza.'], atencao: 'Nunca faça Pix com pressa. Desconfie de pedido urgente, link estranho ou pessoa pedindo dinheiro pelo WhatsApp.', quandoPedirAjuda: 'Peça ajuda antes de confirmar se for valor alto, pessoa desconhecida ou pedido urgente.' } },
+    { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['banco e pix com seguranca', 'pix com seguranca', 'seguranca no banco', 'duvida sobre pix ou banco'], resposta: { respostaSimples: 'No banco, faça tudo com calma e use só o aplicativo oficial.', passoAPasso: ['Abra apenas o aplicativo oficial do seu banco.', 'Não clique em link recebido por mensagem.', 'Não passe senha, código ou token para ninguém.', 'Confirme o nome da pessoa antes de qualquer Pix.', 'Pare e peça ajuda se sentir medo ou pressão.'], atencao: 'Golpistas tentam apressar você para errar.', quandoPedirAjuda: '' } },
+    { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['link estranho', 'link suspeito'], resposta: { respostaSimples: 'Link estranho pode roubar seus dados.', passoAPasso: ['Não clique no link.', 'Se clicou, não preencha nada.', 'Abra o aplicativo oficial digitando o endereço manualmente.', 'Troque sua senha se digitou informação.'], atencao: 'Nunca informe senha, CPF ou cartão em link desconhecido.', quandoPedirAjuda: '' } },
+    { tipo: TIPOS_PUBLICOS.consulta_loja_site, origem: 'seguranca_local', termos: ['loja confiavel', 'site confiavel', 'loja e confiavel', 'site e confiavel'], resposta: { respostaSimples: 'Você pode verificar sinais de confiança antes de comprar.', passoAPasso: ['Confira se o endereço do site está correto.', 'Procure CNPJ, telefone e política de troca.', 'Pesquise o nome da loja em sites de reclamação.', 'Desconfie de preço muito baixo.', 'Se tiver medo, não pague na hora.'], atencao: 'Não envie documento para loja desconhecida.', quandoPedirAjuda: 'Peça ajuda antes de pagar.' } },
+    { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['numero desconhecido', 'foto de familiar', 'se passando por familiar'], resposta: { respostaSimples: 'Não confie só na foto do perfil.', passoAPasso: ['Pare e não envie dinheiro.', 'Ligue para o familiar no número antigo salvo.', 'Se confirmar golpe, bloqueie o contato.', 'Denuncie o número no aplicativo.'], atencao: 'Golpe com foto de familiar é comum.', quandoPedirAjuda: 'Peça ajuda antes de transferir dinheiro.' } },
+    { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['tela inicial', 'instalar o sistema'], resposta: { respostaSimples: 'Você pode adicionar o sistema na tela inicial.', passoAPasso: ['No Android, toque nos três pontos do navegador.', 'Toque em Adicionar à tela inicial.', 'No iPhone, toque em Compartilhar.', 'Toque em Adicionar à Tela de Início.'], atencao: '', quandoPedirAjuda: '' } },
+    { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['tirar print', 'captura de tela'], resposta: { respostaSimples: 'Para tirar print, use os botões do celular.', passoAPasso: ['Abra a tela que deseja salvar.', 'Aperte juntos o botão de ligar e volume para baixo.', 'Procure a imagem na galeria.', 'Compartilhe só com pessoa de confiança.'], atencao: '', quandoPedirAjuda: '' } },
+    { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['conectar no wifi', 'conectar no wi-fi', 'entrar no wifi'], resposta: { respostaSimples: 'Você pode conectar no Wi-Fi pelas configurações.', passoAPasso: ['Abra Configurações.', 'Toque em Wi‑Fi.', 'Escolha a rede da sua casa.', 'Digite a senha e confirme.', 'Espere aparecer Conectado.'], atencao: 'Evite rede aberta desconhecida.', quandoPedirAjuda: '' } }
   ];
 
   const hit = habilidades.find((h) => temAlgum(t, h.termos));
@@ -56,7 +73,7 @@ function responderHabilidadeLocal(pergunta = '') {
 function classificarIntencao(pergunta) {
   const t = normalizarTexto(pergunta);
   if (!t || ['boa', 'bom dia', 'boa tarde', 'boa noite', 'oi', 'ola'].includes(t)) return 'saudacao_ou_vaga';
-  if (/(senha|recuperar conta|esqueci|minha conta|pix|banco|dinheiro|link|suspeito|site confiavel|loja confiavel)/.test(t)) return 'seguranca';
+  if (/(senha|recuperar conta|esqueci|minha conta|pix|banco|dinheiro|codigo|token|link|suspeito|loja|golpe|numero desconhecido|documento)/.test(t)) return 'seguranca';
   if (/(whatsapp|facebook|messenger|celular|internet|app|aplicativo|volume|wifi|foto|print)/.test(t)) return 'duvida_digital';
   return 'duvida_geral';
 }
@@ -96,6 +113,7 @@ export default async function handler(req, res) {
 
   const intencao = classificarIntencao(pergunta);
   if (intencao === 'saudacao_ou_vaga') return res.status(200).json(pacote(TIPOS_PUBLICOS.saudacao_ou_vaga, respostaPadrao({ respostaSimples: 'Olá! Eu sou o Sérgio. Pode me contar sua dúvida.', passoAPasso: ['Escreva com palavras simples.', 'Se quiser, diga o nome do aplicativo.'] }), 'local'));
+  if (intencao === 'seguranca') return res.status(200).json(respostaSegurancaGenerica());
 
   if (!process.env.NVIDIA_API_KEY) return res.status(200).json(pacote(TIPOS_PUBLICOS.fallback, respostaPadrao({ respostaSimples: 'Agora estou sem IA online. Tente novamente em instantes.', passoAPasso: [], atencao: '', quandoPedirAjuda: '' }), 'local'));
 
@@ -105,7 +123,7 @@ export default async function handler(req, res) {
     const resposta = await chamarNvidia(pergunta, contexto, intencao, historicoSeguro);
     if (!resposta || !resposta.respostaSimples) throw new Error('ia_invalida');
     const tipo = intencao === 'duvida_digital' ? TIPOS_PUBLICOS.duvida_digital : TIPOS_PUBLICOS.duvida_geral;
-    return res.status(200).json(pacote(tipo, resposta, contexto.length ? 'faq' : 'ia'));
+    return res.status(200).json(pacote(tipo, resposta, contexto.length ? 'ia_com_contexto' : 'ia'));
   } catch {
     return res.status(200).json(pacote(TIPOS_PUBLICOS.fallback, respostaPadrao({
       respostaSimples: 'Não consegui responder agora. Tente novamente em instantes.', passoAPasso: ['Você pode reformular a pergunta com calma.'], atencao: '', quandoPedirAjuda: 'Se for urgente, peça ajuda a alguém de confiança.'
