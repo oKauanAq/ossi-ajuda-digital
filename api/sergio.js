@@ -13,8 +13,44 @@ const TIPOS_PUBLICOS = {
   fallback: 'fallback'
 };
 
-function normalizarTexto(texto = '') { return texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim(); }
+function normalizarTexto(texto = '') {
+  return texto.toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\bwhastapp\b/g, 'whatsapp')
+    .replace(/\bwhatsap\b/g, 'whatsapp')
+    .replace(/\bzap\b/g, 'whatsapp')
+    .replace(/\bface\b/g, 'facebook')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 function temDadoPessoal(texto = '') { return /(senha|cpf|cartao|documento|rg|codigo|token|pix|dados bancarios)/i.test(String(texto)); }
+function temAlgum(t, termos) { return termos.some((x) => t.includes(x)); }
+function contarCorrespondencias(t, termos) { return termos.filter((termo) => t.includes(termo)).length; }
+
+function ehRiscoFinanceiro(texto = '') {
+  const t = normalizarTexto(texto);
+  const termos = ['dinheiro', 'pix', 'banco', 'pagamento', 'transferencia', 'deposito', 'mil reais', '60 mil', 'valor alto', 'boleto', 'reais'];
+  return temAlgum(t, termos);
+}
+
+function ehGolpeFamiliarFalso(texto = '') {
+  const t = normalizarTexto(texto);
+  const familiares = ['irmao', 'irma', 'mae', 'pai', 'filho', 'filha', 'neto', 'neta', 'sobrinho', 'sobrinha', 'primo', 'prima', 'tio', 'tia', 'familiar', 'parente'];
+  const identidade = ['foto de perfil', 'foto', 'nome', 'perfil', 'se passando', 'fingindo', 'dizendo que e', 'usando a foto', 'outro numero', 'numero novo', 'numero desconhecido'];
+  const financeiro = ['dinheiro', 'pix', 'pagar', 'pagamento', 'transferencia', 'deposito', 'emprestar', 'urgente', 'mil', 'reais', 'boleto', 'pedindo', 'pediu'];
+  const contexto = ['whatsapp', 'mensagem', 'numero novo', 'numero desconhecido', 'outro numero'];
+
+  const temFamilia = temAlgum(t, familiares);
+  const temIdentidade = temAlgum(t, identidade);
+  const temFinanceiro = temAlgum(t, financeiro);
+  const temContexto = temAlgum(t, contexto);
+  const sinaisFortes = contarCorrespondencias(t, ['foto de perfil', 'nome', 'whatsapp', 'numero novo', 'outro numero', 'pedindo dinheiro', 'pedindo pix', 'pediu pix', 'pediu dinheiro']);
+
+  if (temFamilia && temIdentidade && temFinanceiro) return true;
+  if (temFamilia && temFinanceiro && (temContexto || sinaisFortes >= 2)) return true;
+  return false;
+}
 
 function limparCampoResposta(valor = '') {
   return String(valor).replace(/```json|```/gi, ' ').replace(/[{}\[\]"]/g, ' ').replace(/\\[nrt]/g, ' ').replace(/\\/g, ' ').replace(/\b(resposta\s*simples|respostasimples|passo\s*a\s*passo|passoapasso|atencao|aten[cç][aã]o|quando\s*pedir\s*ajuda|quandopedirajuda)\s*[:=-]?/gi, ' ').replace(/\s+/g, ' ').replace(/,\s*$/, '.').trim().slice(0, 420);
@@ -38,8 +74,6 @@ function respostaPadrao(resposta = {}, defaults = {}) {
 }
 const pacote = (tipo, resposta, origem) => ({ tipo, resposta, origem });
 
-function temAlgum(t, termos) { return termos.some((x) => t.includes(x)); }
-
 
 function respostaEsclarecimentoLocal(tipo = '') {
   const mapa = {
@@ -56,10 +90,19 @@ function respostaEsclarecimentoLocal(tipo = '') {
 
 function respostaSegurancaGenerica() {
   return pacote(TIPOS_PUBLICOS.seguranca, respostaPadrao({
-    respostaSimples: 'Esse assunto envolve segurança. Vamos fazer com calma.',
-    passoAPasso: ['Não clique em links desconhecidos.', 'Não envie senha, código, CPF, cartão ou documento.', 'Não faça Pix nem pagamento com pressa.', 'Abra apenas o aplicativo oficial.', 'Peça ajuda se estiver em dúvida.'],
+    respostaSimples: 'Esse assunto pode envolver golpe. Não envie dinheiro, senha ou código antes de confirmar.',
+    passoAPasso: ['Pare e não faça pagamento agora.', 'Não clique em links.', 'Não envie senha, código, CPF, cartão ou documento.', 'Confirme por outro caminho, como ligação para número conhecido.', 'Peça ajuda a alguém de confiança.'],
     atencao: 'Com pressa é mais fácil cair em golpe.',
     quandoPedirAjuda: 'Peça ajuda antes de confirmar qualquer pagamento.'
+  }), 'seguranca_local');
+}
+
+function respostaGolpeFamiliarFalso() {
+  return pacote(TIPOS_PUBLICOS.seguranca, respostaPadrao({
+    respostaSimples: 'Pode ser golpe. Não envie dinheiro e não responda com pressa.',
+    passoAPasso: ['Não faça Pix nem transferência.', 'Não clique em links.', 'Ligue para seu familiar pelo número antigo que você já conhece.', 'Pergunte algo que só ele saberia responder.', 'Se confirmar suspeita, bloqueie e denuncie o contato.', 'Peça ajuda a alguém de confiança.'],
+    atencao: 'Golpistas podem usar foto e nome de familiar para enganar.',
+    quandoPedirAjuda: 'Peça ajuda antes de enviar qualquer valor, principalmente se for urgente ou alto.'
   }), 'seguranca_local');
 }
 
@@ -67,7 +110,7 @@ function responderHabilidadeLocal(pergunta = '') {
   const t = normalizarTexto(pergunta);
   const habilidades = [
     { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'esclarecimento_local', termos: ['preciso de ajuda com meu celular', 'ajuda com celular'], resposta: respostaEsclarecimentoLocal('celular').resposta },
-    { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'esclarecimento_local', termos: ['estou com duvida no whatsapp', 'estou com dúvida no whatsapp', 'duvida no whatsapp', 'duvida whatsapp', 'whatsapp'], resposta: respostaEsclarecimentoLocal('whatsapp').resposta },
+    { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'esclarecimento_local', termos: ['estou com duvida no whatsapp', 'estou com dúvida no whatsapp', 'duvida no whatsapp', 'duvida whatsapp'], resposta: respostaEsclarecimentoLocal('whatsapp').resposta },
     { tipo: TIPOS_PUBLICOS.seguranca, origem: 'esclarecimento_local', termos: ['tenho uma duvida sobre pix ou banco e quero fazer com seguranca', 'tenho problema no banco', 'problema no banco'], resposta: respostaEsclarecimentoLocal('banco').resposta },
     { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['acho que estou passando por um golpe o que devo fazer'], resposta: { respostaSimples: 'Vamos com calma. Se você acha que é golpe, não clique em nada e não envie dinheiro.', passoAPasso: ['Pare e respire antes de agir.', 'Não clique em links recebidos.', 'Não passe senha, código ou documento.', 'Bloqueie o contato suspeito e denuncie no aplicativo.'], atencao: 'Golpistas usam urgência para pressionar.', quandoPedirAjuda: 'Peça ajuda a alguém de confiança antes de qualquer pagamento.' } },
     { tipo: TIPOS_PUBLICOS.duvida_geral, origem: 'habilidade_local', termos: ['tenho uma duvida do dia a dia'], resposta: { respostaSimples: 'Pode me perguntar. Vou tentar explicar de um jeito simples.', passoAPasso: ['Escreva sua dúvida com calma.', 'Se quiser, pergunte algo específico como: O que é anime? ou Como pesquisar no Google?'], atencao: '', quandoPedirAjuda: '' } },
@@ -85,7 +128,7 @@ function responderHabilidadeLocal(pergunta = '') {
     { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['banco e pix com seguranca', 'pix com seguranca', 'seguranca no banco', 'duvida sobre pix ou banco'], resposta: { respostaSimples: 'No banco, faça tudo com calma e use só o aplicativo oficial.', passoAPasso: ['Abra apenas o aplicativo oficial do seu banco.', 'Não clique em link recebido por mensagem.', 'Não passe senha, código ou token para ninguém.', 'Confirme o nome da pessoa antes de qualquer Pix.', 'Pare e peça ajuda se sentir medo ou pressão.'], atencao: 'Golpistas tentam apressar você para errar.', quandoPedirAjuda: '' } },
     { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['link estranho', 'link suspeito'], resposta: { respostaSimples: 'Link estranho pode roubar seus dados.', passoAPasso: ['Não clique no link.', 'Se clicou, não preencha nada.', 'Abra o aplicativo oficial digitando o endereço manualmente.', 'Troque sua senha se digitou informação.'], atencao: 'Nunca informe senha, CPF ou cartão em link desconhecido.', quandoPedirAjuda: '' } },
     { tipo: TIPOS_PUBLICOS.consulta_loja_site, origem: 'esclarecimento_local', termos: ['loja confiavel', 'site confiavel', 'loja e confiavel', 'site e confiavel', 'a loja e confiavel', 'a loja é confiável'], resposta: respostaEsclarecimentoLocal('loja_site').resposta },
-    { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['numero desconhecido', 'foto de familiar', 'se passando por familiar'], resposta: { respostaSimples: 'Não confie só na foto do perfil.', passoAPasso: ['Pare e não envie dinheiro.', 'Ligue para o familiar no número antigo salvo.', 'Se confirmar golpe, bloqueie o contato.', 'Denuncie o número no aplicativo.'], atencao: 'Golpe com foto de familiar é comum.', quandoPedirAjuda: 'Peça ajuda antes de transferir dinheiro.' } },
+    { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['numero desconhecido', 'foto de familiar', 'se passando por familiar', 'foto de perfil do meu irmao', 'foto do meu irmao', 'nome do meu irmao', 'foto da minha mae', 'nome da minha mae', 'pedindo dinheiro', 'pedindo pix', 'pediu dinheiro pelo whatsapp', 'pediu pix pelo whatsapp', 'numero novo dizendo que e meu filho'], resposta: { respostaSimples: 'Pode ser golpe. Não envie dinheiro e não responda com pressa.', passoAPasso: ['Não faça Pix nem transferência.', 'Ligue para seu familiar no número antigo.', 'Pergunte algo que só ele saberia responder.', 'Se confirmar suspeita, bloqueie e denuncie o contato.'], atencao: 'Golpistas podem usar foto e nome de familiar.', quandoPedirAjuda: 'Peça ajuda antes de enviar qualquer valor.' } },
     { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['tela inicial', 'instalar o sistema'], resposta: { respostaSimples: 'Você pode adicionar o sistema na tela inicial.', passoAPasso: ['No Android, toque nos três pontos do navegador.', 'Toque em Adicionar à tela inicial.', 'No iPhone, toque em Compartilhar.', 'Toque em Adicionar à Tela de Início.'], atencao: '', quandoPedirAjuda: '' } },
     { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['tirar print', 'captura de tela'], resposta: { respostaSimples: 'Para tirar print, use os botões do celular.', passoAPasso: ['Abra a tela que deseja salvar.', 'Aperte juntos o botão de ligar e volume para baixo.', 'Procure a imagem na galeria.', 'Compartilhe só com pessoa de confiança.'], atencao: '', quandoPedirAjuda: '' } },
     { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['conectar no wifi', 'conectar no wi-fi', 'entrar no wifi'], resposta: { respostaSimples: 'Você pode conectar no Wi-Fi pelas configurações.', passoAPasso: ['Abra Configurações.', 'Toque em Wi‑Fi.', 'Escolha a rede da sua casa.', 'Digite a senha e confirme.', 'Espere aparecer Conectado.'], atencao: 'Evite rede aberta desconhecida.', quandoPedirAjuda: '' } }
@@ -133,12 +176,14 @@ export default async function handler(req, res) {
   const historico = Array.isArray(req.body?.historico) ? req.body.historico : [];
   if (!pergunta.trim()) return res.status(400).json({ error: 'Pergunta inválida.' });
 
+  if (ehGolpeFamiliarFalso(pergunta)) return res.status(200).json(respostaGolpeFamiliarFalso());
+
   const habilidade = responderHabilidadeLocal(pergunta);
   if (habilidade) return res.status(200).json(habilidade);
 
   const intencao = classificarIntencao(pergunta);
   if (intencao === 'saudacao_ou_vaga') return res.status(200).json(pacote(TIPOS_PUBLICOS.saudacao_ou_vaga, respostaPadrao({ respostaSimples: 'Olá! Eu sou o Sérgio. Pode me contar sua dúvida.', passoAPasso: ['Escreva com palavras simples.', 'Se quiser, diga o nome do aplicativo.'] }), 'local'));
-  if (intencao === 'seguranca') return res.status(200).json(respostaSegurancaGenerica());
+  if (intencao === 'seguranca' || ehRiscoFinanceiro(pergunta)) return res.status(200).json(respostaSegurancaGenerica());
 
   if (!process.env.NVIDIA_API_KEY) return res.status(200).json(pacote(TIPOS_PUBLICOS.fallback, respostaPadrao({ respostaSimples: 'Agora estou sem IA online. Tente novamente em instantes.', passoAPasso: [], atencao: '', quandoPedirAjuda: '' }), 'local'));
 

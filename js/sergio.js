@@ -60,6 +60,10 @@ function sanitizarResposta(item = {}) {
 
 function detectarApoioVisual(resposta = '', pergunta = '', tipo = '') {
   const base = normalizarTexto(`${resposta} ${pergunta} ${tipo}`);
+  const riscoGolpeFamiliar = ['foto de perfil', 'foto do meu irmao', 'nome do meu irmao', 'foto da minha mae', 'nome da minha mae', 'numero novo', 'outro numero', 'pedindo dinheiro', 'pedindo pix', '60 mil', 'reais', 'whatsapp'];
+  if (riscoGolpeFamiliar.some((termo) => base.includes(termo))) {
+    return { emoji: '🛡️', titulo: 'Cuidado com golpe' };
+  }
   const regras = [
     { termos: ['volume', 'som', 'audio', 'wifi', 'wi-fi', 'print', 'celular'], emoji: '📱', titulo: 'Celular' },
     { termos: ['whatsapp'], emoji: '🟢', titulo: 'WhatsApp' },
