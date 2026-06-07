@@ -14,19 +14,61 @@ const TIPOS_PUBLICOS = {
 };
 
 function normalizarTexto(texto = '') {
-  return texto.toLowerCase()
+  let t = texto.toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/\bwhastapp\b/g, 'whatsapp')
     .replace(/\bwhatsap\b/g, 'whatsapp')
     .replace(/\bzap\b/g, 'whatsapp')
     .replace(/\bface\b/g, 'facebook')
+    .replace(/\besqueci minhas senha\b/g, 'esqueci minha senha')
+    .replace(/\bminhas senha\b/g, 'minha senha')
     .replace(/\s+/g, ' ')
     .trim();
+
+  if (/\b(esqueci|entrar|conta|recuperar|senha)\b/.test(t)) {
+    t = t.replace(/\bminha senhora\b/g, 'minha senha');
+  }
+
+  return t;
 }
 function temDadoPessoal(texto = '') { return /(senha|cpf|cartao|documento|rg|codigo|token|pix|dados bancarios)/i.test(String(texto)); }
 function temAlgum(t, termos) { return termos.some((x) => t.includes(x)); }
 function contarCorrespondencias(t, termos) { return termos.filter((termo) => t.includes(termo)).length; }
+
+
+function ehPerguntaIncompreensivel(texto = '') {
+  const t = normalizarTexto(texto);
+  if (!t) return true;
+
+  const errosComuns = ['pesquise me senhora', 'escusei me senhora', 'me senhora'];
+  if (errosComuns.some((erro) => t === erro || t.includes(erro))) return true;
+
+  const palavras = t.split(' ').filter(Boolean);
+  const intencoesClaras = [
+    'ajuda', 'aplicativo', 'app', 'banco', 'celular', 'codigo', 'conta', 'entrar',
+    'esqueci', 'facebook', 'fazer', 'foto', 'golpe', 'instagram', 'link', 'pix',
+    'recuperar', 'senha', 'whatsapp', 'quem', 'como', 'qual', 'porque', 'onde'
+  ];
+  const temIntencaoClara = temAlgum(t, intencoesClaras);
+
+  if (palavras.length <= 2 && !temIntencaoClara) return true;
+
+  const conectivosSemPedido = new Set(['de', 'do', 'da', 'o', 'a', 'e', 'me', 'minha', 'minhas', 'senhora', 'por', 'favor']);
+  const palavrasUteis = palavras.filter((palavra) => !conectivosSemPedido.has(palavra));
+  const pareceRuidoCurto = palavras.length <= 4 && palavrasUteis.length <= 1 && !temIntencaoClara;
+
+  return pareceRuidoCurto;
+}
+
+function respostaPerguntaIncompreensivel() {
+  return pacote(TIPOS_PUBLICOS.saudacao_ou_vaga, respostaPadrao({
+    respostaSimples: 'Não entendi bem. Pode repetir com calma?',
+    passoAPasso: ['Fale uma frase curta.', 'Diga o nome do aplicativo, como WhatsApp, Facebook ou banco.', 'Se preferir, escreva sua dúvida.'],
+    atencao: 'Não fale senha, código, CPF ou dados do banco.',
+    quandoPedirAjuda: 'Peça ajuda se for sobre dinheiro, senha ou golpe.'
+  }), 'local');
+}
 
 function ehRiscoFinanceiro(texto = '') {
   const t = normalizarTexto(texto);
@@ -77,7 +119,7 @@ const pacote = (tipo, resposta, origem) => ({ tipo, resposta, origem });
 
 function respostaEsclarecimentoLocal(tipo = '') {
   const mapa = {
-    senha_conta: { tipo: TIPOS_PUBLICOS.seguranca, origem: 'esclarecimento_local', resposta: { respostaSimples: 'Posso ajudar. Primeiro me diga de qual aplicativo ou conta você esqueceu a senha.', passoAPasso: ['Escolha uma opção abaixo ou escreva o nome do aplicativo.', 'Não envie sua senha para ninguém.', 'Não envie código recebido por SMS ou WhatsApp.'], atencao: 'Nunca compartilhe senha, código, CPF, cartão ou documento.', quandoPedirAjuda: 'Peça ajuda se aparecer cobrança, link estranho ou pedido de código.', opcoesFluxo: ['Facebook', 'Instagram', 'Gov.br', 'Banco', 'E-mail', 'WhatsApp', 'Outro aplicativo'] } },
+    senha_conta: { tipo: TIPOS_PUBLICOS.seguranca, origem: 'esclarecimento_local', resposta: { respostaSimples: 'Posso ajudar. Primeiro preciso saber de qual aplicativo ou conta estamos falando.', passoAPasso: ['Escolha uma opção abaixo ou escreva o nome do aplicativo.', 'Não envie sua senha para ninguém.', 'Não envie código recebido por SMS ou WhatsApp.'], atencao: 'Nunca compartilhe senha, código, CPF, cartão ou documento.', quandoPedirAjuda: 'Peça ajuda se aparecer cobrança, link estranho ou pedido de código.', opcoesFluxo: ['Facebook', 'Instagram', 'Gov.br', 'Banco', 'E-mail', 'WhatsApp', 'Outro aplicativo'] } },
     banco: { tipo: TIPOS_PUBLICOS.seguranca, origem: 'esclarecimento_local', resposta: { respostaSimples: 'Entendi. É problema para entrar no app, fazer Pix, ver saldo ou outro assunto?', passoAPasso: ['Escolha uma opção abaixo para eu explicar melhor.'], atencao: 'Nunca compartilhe senha ou código do banco.', quandoPedirAjuda: 'Peça ajuda antes de confirmar pagamento.', opcoesFluxo: ['Entrar no app', 'Fazer Pix', 'Ver saldo', 'Outro assunto'] } },
     whatsapp: { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'esclarecimento_local', resposta: { respostaSimples: 'Você quer mandar mensagem, colocar foto, recuperar conta ou verificar golpe?', passoAPasso: ['Escolha uma opção abaixo para continuar.'], atencao: 'Não passe código de verificação do WhatsApp.', quandoPedirAjuda: '', opcoesFluxo: ['Mandar mensagem', 'Colocar foto', 'Recuperar conta', 'Verificar golpe'] } },
     celular: { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'esclarecimento_local', resposta: { respostaSimples: 'Posso ajudar com celular. Escolha o problema.', passoAPasso: ['Escolha uma opção abaixo ou escreva o que aconteceu.'], atencao: '', quandoPedirAjuda: '', opcoesFluxo: ['Volume', 'Wi‑Fi', 'Print', 'Celular sem som', 'Outro problema'] } },
@@ -114,9 +156,11 @@ function responderHabilidadeLocal(pergunta = '') {
     { tipo: TIPOS_PUBLICOS.seguranca, origem: 'esclarecimento_local', termos: ['tenho uma duvida sobre pix ou banco e quero fazer com seguranca', 'tenho problema no banco', 'problema no banco'], resposta: respostaEsclarecimentoLocal('banco').resposta },
     { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['acho que estou passando por um golpe o que devo fazer'], resposta: { respostaSimples: 'Vamos com calma. Se você acha que é golpe, não clique em nada e não envie dinheiro.', passoAPasso: ['Pare e respire antes de agir.', 'Não clique em links recebidos.', 'Não passe senha, código ou documento.', 'Bloqueie o contato suspeito e denuncie no aplicativo.'], atencao: 'Golpistas usam urgência para pressionar.', quandoPedirAjuda: 'Peça ajuda a alguém de confiança antes de qualquer pagamento.' } },
     { tipo: TIPOS_PUBLICOS.duvida_geral, origem: 'habilidade_local', termos: ['tenho uma duvida do dia a dia'], resposta: { respostaSimples: 'Pode me perguntar. Vou tentar explicar de um jeito simples.', passoAPasso: ['Escreva sua dúvida com calma.', 'Se quiser, pergunte algo específico como: O que é anime? ou Como pesquisar no Google?'], atencao: '', quandoPedirAjuda: '' } },
+    { tipo: TIPOS_PUBLICOS.duvida_geral, origem: 'habilidade_local', termos: ['quem e o bob esponja', 'quem é o bob esponja', 'bob esponja'], resposta: { respostaSimples: 'Bob Esponja é um personagem de desenho animado. Ele é uma esponja amarela que vive no fundo do mar e trabalha no Siri Cascudo. É uma série de humor feita principalmente para crianças, mas muitos adultos também gostam.', passoAPasso: [], atencao: '', quandoPedirAjuda: '' } },
     { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['aumentar o volume', 'aumentar o som', 'nao escuto', 'celular esta baixo', 'volume do celular'], resposta: { respostaSimples: 'Vamos aumentar o volume com calma.', passoAPasso: ['Pegue o celular na mão.', 'Aperte o botão de cima na lateral.', 'Veja se a barra de volume aparece na tela.', 'Teste o som com um vídeo curto.', 'Se ainda estiver baixo, abra Configurações e toque em Som.', 'Peça ajuda se o botão não funcionar.'], atencao: 'Não instale aplicativo desconhecido para aumentar som.', quandoPedirAjuda: '' } },
     { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['foto no whatsapp', 'trocar foto do perfil', 'mudar foto do zap', 'colocar foto no perfil'], resposta: { respostaSimples: 'Você pode trocar a foto do WhatsApp em poucos toques.', passoAPasso: ['Abra o WhatsApp.', 'Toque em Configurações.', 'Toque no seu nome ou na sua foto.', 'Toque no ícone de câmera.', 'Escolha uma foto da galeria.', 'Toque em confirmar.'], atencao: 'Evite usar foto com documento ou dados pessoais.', quandoPedirAjuda: '' } },
     { tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', termos: ['mandar mensagem no whatsapp', 'enviar mensagem no whatsapp'], resposta: { respostaSimples: 'Mandar mensagem no WhatsApp é rápido e simples.', passoAPasso: ['Abra o WhatsApp.', 'Toque na conversa da pessoa.', 'Digite sua mensagem.', 'Toque na seta para enviar.', 'Confirme se a mensagem apareceu na conversa.'], atencao: 'Confira o nome da pessoa antes de enviar informação importante.', quandoPedirAjuda: '' } },
+    { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['esqueci senha do whatsapp', 'esqueci minha senha no whatsapp', 'esqueci minhas senha no whatsapp', 'nao consigo entrar no whatsapp', 'não consigo entrar no whatsapp', 'perdi acesso ao whatsapp', 'recuperar whatsapp', 'codigo do whatsapp', 'código do whatsapp', 'verificacao do whatsapp', 'verificação do whatsapp'], resposta: { respostaSimples: 'Entendi. Vamos cuidar do acesso ao WhatsApp com segurança.', passoAPasso: ['Abra o WhatsApp pelo aplicativo oficial.', 'Siga a recuperação indicada na tela.', 'Se aparecer código por SMS, não envie esse código para ninguém.', 'Se perdeu o número antigo, peça ajuda antes de tentar recuperar.', 'Não clique em links prometendo recuperar conta.'], atencao: 'Golpistas podem pedir código do WhatsApp para roubar sua conta.', quandoPedirAjuda: 'Peça ajuda se alguém pedir código, dinheiro ou mandar link estranho.' } },
     { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['nao consigo entrar no facebook', 'não consigo entrar no facebook', 'esqueci senha do facebook', 'esqueci a senha do facebook', 'entrar no face', 'recuperar facebook'], resposta: { respostaSimples: 'Para recuperar o Facebook, use apenas o aplicativo ou site oficial.', passoAPasso: ['Abra o aplicativo oficial do Facebook.', 'Toque em Esqueci a senha.', 'Digite seu e-mail ou telefone.', 'Siga o código enviado para você.', 'Crie uma senha nova.', 'Não passe o código para ninguém.'], atencao: 'Nunca compartilhe senha ou código.', quandoPedirAjuda: 'Peça ajuda se aparecer link estranho ou cobrança.' } },
     { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['esqueci senha do instagram', 'esqueci a senha do instagram', 'não consigo entrar no instagram', 'nao consigo entrar no instagram', 'recuperar instagram'], resposta: { respostaSimples: 'Para recuperar o Instagram, use só o aplicativo oficial.', passoAPasso: ['Abra o Instagram.', 'Toque em Esqueceu a senha?.', 'Digite seu e-mail, usuário ou telefone.', 'Siga o código enviado para você.', 'Crie uma senha nova.', 'Não compartilhe o código.'], atencao: 'Não envie senha nem código.', quandoPedirAjuda: 'Peça ajuda se pedirem pagamento para recuperar conta.' } },
     { tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', termos: ['esqueci senha do gov', 'esqueci senha do gov.br', 'esqueci a senha do gov.br', 'não consigo entrar no gov.br', 'nao consigo entrar no gov.br', 'recuperar gov.br'], resposta: { respostaSimples: 'No Gov.br, use apenas o app ou site oficial para recuperar acesso.', passoAPasso: ['Abra o app Gov.br ou o site oficial.', 'Toque em Esqueci minha senha.', 'Informe CPF e siga as opções seguras.', 'Use o código de segurança recebido.', 'Crie nova senha forte.', 'Não compartilhe código com ninguém.'], atencao: 'Use apenas canais oficiais do Gov.br.', quandoPedirAjuda: 'Peça ajuda em posto oficial se não conseguir entrar.' } },
@@ -162,7 +206,7 @@ function parseIA(raw = '') {
 }
 
 async function chamarNvidia(pergunta, contextoFaq, intencao, historicoSeguro) {
-  const system = 'Você é Sérgio, assistente acolhedor para idosos da OSSI. Responda em português simples. Para dúvida geral simples, responda naturalmente em 2 a 4 frases. Só use passo a passo quando for ação prática. Não invente passo a passo inútil. Retorne SOMENTE JSON válido com: {"respostaSimples":"...","passoAPasso":[],"atencao":"","quandoPedirAjuda":""}.';
+  const system = 'Você é Sérgio, assistente acolhedor para idosos da OSSI. Responda em português simples. Para dúvida geral simples, responda naturalmente em 2 a 4 frases, sem inventar. Use linguagem simples. Só use passo a passo quando for ação prática. Não invente passo a passo inútil. Retorne SOMENTE JSON válido com: {"respostaSimples":"...","passoAPasso":[],"atencao":"","quandoPedirAjuda":""}.';
   const payload = { model: MODELO_NVIDIA, temperature: 0.2, max_tokens: 700, extra_body: { chat_template_kwargs: { enable_thinking: false } }, messages: [{ role: 'system', content: system }, { role: 'user', content: `Intenção: ${intencao}\nHistórico: ${JSON.stringify(historicoSeguro)}\nPergunta: ${pergunta}\nContexto FAQ: ${JSON.stringify(contextoFaq)}` }] };
   const resp = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', { method: 'POST', headers: { Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   if (!resp.ok) throw new Error('nvidia_http');
@@ -172,9 +216,12 @@ async function chamarNvidia(pergunta, contextoFaq, intencao, historicoSeguro) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
-  const pergunta = String(req.body?.pergunta || '');
+  const perguntaOriginal = String(req.body?.pergunta || '');
+  const pergunta = normalizarTexto(perguntaOriginal);
   const historico = Array.isArray(req.body?.historico) ? req.body.historico : [];
   if (!pergunta.trim()) return res.status(400).json({ error: 'Pergunta inválida.' });
+
+  if (ehPerguntaIncompreensivel(perguntaOriginal)) return res.status(200).json(respostaPerguntaIncompreensivel());
 
   if (ehGolpeFamiliarFalso(pergunta)) return res.status(200).json(respostaGolpeFamiliarFalso());
 
