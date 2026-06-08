@@ -1,4 +1,4 @@
-const CACHE = 'ossi-ajuda-v2026-05-21';
+const CACHE = 'ossi-ajuda-v2026-06-08-voz-beta';
 const ARQUIVOS = [
   './', './index.html', './css/style.css',
   './js/app.js', './js/sergio.js', './js/search.js', './js/ai.js',
@@ -32,7 +32,7 @@ self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
 
-  if (url.pathname.startsWith('/api/sergio')) {
+  if (url.pathname.startsWith('/api/sergio') || url.pathname.startsWith('/api/voz/transcrever')) {
     event.respondWith(fetch(request));
     return;
   }

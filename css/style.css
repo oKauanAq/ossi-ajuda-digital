@@ -58,3 +58,13 @@ h1 { margin:0; font-size:1.4rem; color:var(--vinho); }
 button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible { outline:3px solid #111; outline-offset:2px; }
 
 @media (max-width:720px){ body{font-size:21px;} .container{padding:10px;} .acoes-grid{grid-template-columns:1fr;} .home-card{min-height:76px;} .sergio-widget{right:10px; left:10px; width:auto; bottom:92px; max-height:82vh;} .chat-sergio{max-height:50vh;} .resposta-destaque{font-size:clamp(20px,5.7vw,24px);} .passo-texto{font-size:clamp(18px,5.1vw,21px);} }
+.voz-beta { border:2px solid #e2d2a6; border-radius:14px; padding:12px; margin-bottom:10px; background:#fffaf2; }
+.btn-voz { font-size:1.1rem; padding:16px; }
+.btn-voz-parar { background:#9b1c1c; font-size:1.1rem; padding:16px; }
+.voz-status { margin:8px 0 0; line-height:1.4; font-weight:700; color:var(--vinho-escuro); }
+.voz-confirmacao { margin-top:10px; padding:12px; border:2px solid #b8d7c2; border-radius:12px; background:#f1fff5; }
+.voz-confirmacao p { margin:0 0 8px; line-height:1.4; }
+.voz-confirmacao-botoes { display:grid; grid-template-columns:1fr; gap:8px; }
+.voz-confirmacao-botoes .small-btn { width:100%; padding:12px; font-size:1rem; }
+.voz-privacidade { margin:8px 0 0; font-size:.82rem; line-height:1.35; color:#555; }
+@media (min-width:520px){ .voz-confirmacao-botoes{grid-template-columns:1fr 1fr 1fr;} .voz-confirmacao-botoes .btn{grid-column:1/-1;} }
