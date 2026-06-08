@@ -90,6 +90,24 @@
     </div>
 
     <div id="chat-sergio" class="chat-sergio" aria-live="polite"></div>
+
+    <div class="voz-beta" aria-label="Modo voz beta do Sérgio">
+      <button id="btn-voz-sergio" class="btn btn-voz" type="button">🎙️ Falar pergunta</button>
+      <button id="btn-parar-voz-sergio" class="btn btn-voz-parar hidden" type="button">Parar gravação</button>
+      <p id="status-voz-sergio" class="voz-status" role="status" aria-live="polite">Fale sua pergunta com calma.</p>
+      <div id="confirmacao-voz-sergio" class="voz-confirmacao hidden">
+        <p><strong>Entendi isso:</strong> <span id="texto-voz-sergio"></span></p>
+        <p>Se estiver certo, toque em Enviar ao Sérgio.</p>
+        <p>Se estiver errado, toque em Gravar de novo ou Editar texto.</p>
+        <div class="voz-confirmacao-botoes">
+          <button id="btn-enviar-voz-sergio" class="btn" type="button">Enviar ao Sérgio</button>
+          <button id="btn-regravar-voz-sergio" class="small-btn" type="button">Gravar de novo</button>
+          <button id="btn-editar-voz-sergio" class="small-btn" type="button">Editar texto</button>
+        </div>
+      </div>
+      <p class="voz-privacidade">O áudio é usado apenas para transformar sua fala em texto. Ele não fica salvo no sistema.</p>
+    </div>
+
     <div class="chat-acoes">
       <input id="pergunta-sergio" type="text" placeholder="Digite sua dúvida" />
       <div class="chat-botoes">

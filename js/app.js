@@ -174,6 +174,198 @@ function renderChatSergio() {
   chat.scrollTop = chat.scrollHeight;
 }
 
+
+const VOZ_DURACAO_MAX_MS = 7000;
+const VOZ_SAMPLE_RATE = 16000;
+const VOZ_ENDPOINT = '/api/voz/transcrever';
+let estadoVozSergio = { stream: null, audioContext: null, processor: null, source: null, buffers: [], sampleRate: 0, timer: null, gravando: false, transcricao: '' };
+
+function concatenarBuffersAudio(buffers) {
+  const total = buffers.reduce((soma, buffer) => soma + buffer.length, 0);
+  const resultado = new Float32Array(total);
+  let offset = 0;
+  buffers.forEach((buffer) => { resultado.set(buffer, offset); offset += buffer.length; });
+  return resultado;
+}
+
+function reamostrarAudio(input, inputRate, outputRate) {
+  if (inputRate === outputRate) return input;
+  const ratio = inputRate / outputRate;
+  const novoTamanho = Math.max(1, Math.round(input.length / ratio));
+  const output = new Float32Array(novoTamanho);
+  for (let i = 0; i < novoTamanho; i += 1) {
+    const pos = i * ratio;
+    const antes = Math.floor(pos);
+    const depois = Math.min(antes + 1, input.length - 1);
+    const peso = pos - antes;
+    output[i] = (input[antes] * (1 - peso)) + (input[depois] * peso);
+  }
+  return output;
+}
+
+function codificarWavMono16(samples, sampleRate) {
+  const bytesPorSample = 2;
+  const buffer = new ArrayBuffer(44 + samples.length * bytesPorSample);
+  const view = new DataView(buffer);
+  const escrever = (offset, texto) => { for (let i = 0; i < texto.length; i += 1) view.setUint8(offset + i, texto.charCodeAt(i)); };
+  escrever(0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * bytesPorSample, true);
+  escrever(8, 'WAVE');
+  escrever(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * bytesPorSample, true);
+  view.setUint16(32, bytesPorSample, true);
+  view.setUint16(34, 16, true);
+  escrever(36, 'data');
+  view.setUint32(40, samples.length * bytesPorSample, true);
+  let offset = 44;
+  for (let i = 0; i < samples.length; i += 1, offset += 2) {
+    const sample = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7fff, true);
+  }
+  return new Blob([view], { type: 'audio/wav' });
+}
+
+function blobParaBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(String(reader.result || '').split(',')[1] || '');
+    reader.onerror = () => reject(new Error('falha_leitura_audio'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function limparCapturaVoz() {
+  if (estadoVozSergio.timer) clearTimeout(estadoVozSergio.timer);
+  estadoVozSergio.timer = null;
+  if (estadoVozSergio.processor) estadoVozSergio.processor.disconnect();
+  if (estadoVozSergio.source) estadoVozSergio.source.disconnect();
+  if (estadoVozSergio.audioContext) estadoVozSergio.audioContext.close().catch(() => {});
+  if (estadoVozSergio.stream) estadoVozSergio.stream.getTracks().forEach((track) => track.stop());
+  estadoVozSergio.processor = null;
+  estadoVozSergio.source = null;
+  estadoVozSergio.audioContext = null;
+  estadoVozSergio.stream = null;
+  estadoVozSergio.gravando = false;
+}
+
+function initModoVozSergio(campo, enviarPerguntaDireta) {
+  const btnGravar = document.getElementById('btn-voz-sergio');
+  const btnParar = document.getElementById('btn-parar-voz-sergio');
+  const status = document.getElementById('status-voz-sergio');
+  const confirmacao = document.getElementById('confirmacao-voz-sergio');
+  const textoVoz = document.getElementById('texto-voz-sergio');
+  const btnEnviar = document.getElementById('btn-enviar-voz-sergio');
+  const btnRegravar = document.getElementById('btn-regravar-voz-sergio');
+  const btnEditar = document.getElementById('btn-editar-voz-sergio');
+  if (!btnGravar || !btnParar || !status || !confirmacao || !textoVoz) return;
+
+  const mostrarStatus = (texto) => { status.textContent = texto; };
+  const setGravando = (gravando) => {
+    btnGravar.classList.toggle('hidden', gravando);
+    btnParar.classList.toggle('hidden', !gravando);
+  };
+  const esconderConfirmacao = () => {
+    estadoVozSergio.transcricao = '';
+    textoVoz.textContent = '';
+    confirmacao.classList.add('hidden');
+  };
+
+  async function enviarAudioParaTranscricao(blob) {
+    mostrarStatus('Estou entendendo sua fala...');
+    const audioBase64 = await blobParaBase64(blob);
+    const resposta = await fetch(VOZ_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+      body: JSON.stringify({ audioBase64, mimeType: 'audio/wav' })
+    });
+    const dados = await resposta.json().catch(() => ({}));
+    if (!resposta.ok || !dados.ok || !dados.transcricao) throw new Error(dados.erro || 'voz_indisponivel');
+    estadoVozSergio.transcricao = String(dados.transcricao).trim();
+    textoVoz.textContent = estadoVozSergio.transcricao;
+    confirmacao.classList.remove('hidden');
+    mostrarStatus('Entendi isso. Confira antes de enviar.');
+  }
+
+  async function pararGravacao() {
+    if (!estadoVozSergio.gravando) return;
+    const buffers = estadoVozSergio.buffers.slice();
+    const sampleRate = estadoVozSergio.sampleRate;
+    limparCapturaVoz();
+    setGravando(false);
+    if (!buffers.length) {
+      mostrarStatus('Não consegui entender o áudio. Tente gravar novamente ou escreva sua dúvida.');
+      return;
+    }
+    try {
+      const mono = concatenarBuffersAudio(buffers);
+      const audio16k = reamostrarAudio(mono, sampleRate, VOZ_SAMPLE_RATE);
+      const wav = codificarWavMono16(audio16k, VOZ_SAMPLE_RATE);
+      await enviarAudioParaTranscricao(wav);
+    } catch (_) {
+      mostrarStatus('Não consegui entender o áudio. Tente gravar novamente ou escreva sua dúvida.');
+    }
+  }
+
+  async function iniciarGravacao() {
+    esconderConfirmacao();
+    if (!navigator.mediaDevices?.getUserMedia || (!window.AudioContext && !window.webkitAudioContext)) {
+      mostrarStatus('Este aparelho não permite gravar áudio aqui. Escreva sua dúvida para o Sérgio.');
+      return;
+    }
+    if (!window.isSecureContext && !['localhost', '127.0.0.1'].includes(window.location.hostname)) {
+      mostrarStatus('Este aparelho não permite gravar áudio aqui. Escreva sua dúvida para o Sérgio.');
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, noiseSuppression: true, echoCancellation: true } });
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const audioContext = new AudioCtx();
+      const source = audioContext.createMediaStreamSource(stream);
+      const processor = audioContext.createScriptProcessor(4096, 1, 1);
+      estadoVozSergio = { stream, audioContext, processor, source, buffers: [], sampleRate: audioContext.sampleRate, timer: null, gravando: true, transcricao: '' };
+      processor.onaudioprocess = (event) => {
+        if (!estadoVozSergio.gravando) return;
+        estadoVozSergio.buffers.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+      };
+      source.connect(processor);
+      processor.connect(audioContext.destination);
+      setGravando(true);
+      mostrarStatus('Estou ouvindo... fale com calma.');
+      estadoVozSergio.timer = setTimeout(() => pararGravacao(), VOZ_DURACAO_MAX_MS);
+    } catch (error) {
+      limparCapturaVoz();
+      setGravando(false);
+      if (error?.name === 'NotAllowedError' || error?.name === 'PermissionDeniedError') {
+        mostrarStatus('Não consegui acessar o microfone. Você pode escrever sua dúvida no campo abaixo.');
+        return;
+      }
+      mostrarStatus('Este aparelho não permite gravar áudio aqui. Escreva sua dúvida para o Sérgio.');
+    }
+  }
+
+  btnGravar.addEventListener('click', iniciarGravacao);
+  btnParar.addEventListener('click', pararGravacao);
+  btnRegravar?.addEventListener('click', iniciarGravacao);
+  btnEditar?.addEventListener('click', () => {
+    if (!estadoVozSergio.transcricao) return;
+    campo.value = estadoVozSergio.transcricao;
+    campo.focus();
+    mostrarStatus('Você pode editar o texto antes de enviar.');
+  });
+  btnEnviar?.addEventListener('click', () => {
+    if (!estadoVozSergio.transcricao) return;
+    const transcricao = estadoVozSergio.transcricao;
+    esconderConfirmacao();
+    mostrarStatus('Pergunta enviada ao Sérgio.');
+    enviarPerguntaDireta(transcricao);
+  });
+}
+
 function initSergio() {
   const botao = document.getElementById('btn-sergio'); const campo = document.getElementById('pergunta-sergio'); const botaoLimpar = document.getElementById('btn-limpar-sergio'); const chat = document.getElementById('chat-sergio');
   restaurarHistorico(); renderChatSergio();
@@ -185,6 +377,7 @@ function initSergio() {
     await enviarPergunta();
   };
   window.enviarPerguntaSergioDireta = enviarPerguntaDireta;
+  initModoVozSergio(campo, enviarPerguntaDireta);
   const enviarPergunta = async () => {
     const pergunta = campo.value.trim(); if (!pergunta) return;
     const requestId = ++sergioRequestId; historicoSergio.push({ role: 'user', content: pergunta }); campo.value = ''; historicoSergio.push({ role: 'assistant', content: 'Sérgio está pensando...' }); renderChatSergio(); salvarHistorico();
