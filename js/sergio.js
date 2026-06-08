@@ -60,17 +60,26 @@ function sanitizarResposta(item = {}) {
 
 function detectarApoioVisual(resposta = '', pergunta = '', tipo = '') {
   const base = normalizarTexto(`${resposta} ${pergunta} ${tipo}`);
-  const riscoGolpeFamiliar = ['foto de perfil', 'foto do meu irmao', 'nome do meu irmao', 'foto da minha mae', 'nome da minha mae', 'numero novo', 'outro numero', 'pedindo dinheiro', 'pedindo pix', '60 mil', 'reais', 'whatsapp'];
-  if (riscoGolpeFamiliar.some((termo) => base.includes(termo))) {
+  const pedidoDinheiro = /(pedindo|pediu|pediram|pede|pedir|pedido).{0,24}(dinheiro|pix|transferencia|valor)|(?:dinheiro|pix|transferencia|valor).{0,24}(urgente|agora|rapido)/.test(base);
+  const familiarFalso = /(foto|nome|numero novo|outro numero).{0,36}(filho|filha|irmao|irma|mae|pai|familiar|parente)|(?:filho|filha|irmao|irma|mae|pai|familiar|parente).{0,36}(foto|nome|numero novo|outro numero)/.test(base);
+  const linkSuspeito = /(link).{0,28}(estranho|suspeito|promocao|premio|desconhecido|whatsapp)|(?:estranho|suspeito|promocao|premio|desconhecido).{0,28}(link)/.test(base);
+  const golpeExplicito = /\bgolpe\b|numero desconhecido|numero novo/.test(base);
+
+  if (pedidoDinheiro || familiarFalso || linkSuspeito || golpeExplicito) {
     return { emoji: '🛡️', titulo: 'Cuidado com golpe' };
   }
+
+  const senhaConta = /(senha|recuperar senha|recuperar conta|login|codigo de verificacao|acesso ao whatsapp|acesso ao facebook|acesso ao instagram|gov\.br|banco.{0,20}senha|senha.{0,20}banco|entrar.{0,20}(whatsapp|facebook|instagram|gov\.br|banco)|acesso.{0,20}(whatsapp|facebook|instagram|gov\.br|banco))/.test(base);
+  if (senhaConta) {
+    return { emoji: '🔐', titulo: 'Senha e conta' };
+  }
+
   const regras = [
     { termos: ['volume', 'som', 'audio', 'wifi', 'wi-fi', 'print', 'celular'], emoji: '📱', titulo: 'Celular' },
+    { termos: ['pix', 'banco', 'dinheiro'], emoji: '💳', titulo: 'Banco e Pix' },
     { termos: ['whatsapp'], emoji: '🟢', titulo: 'WhatsApp' },
     { termos: ['facebook', 'messenger'], emoji: '💬', titulo: 'Facebook/Messenger' },
     { termos: ['golpe', 'link', 'suspeito', 'urgente'], emoji: '🛡️', titulo: 'Cuidado com golpe' },
-    { termos: ['senha', 'conta', 'login', 'codigo'], emoji: '🔐', titulo: 'Senha e conta' },
-    { termos: ['pix', 'banco', 'dinheiro'], emoji: '💳', titulo: 'Banco e Pix' },
     { termos: ['loja', 'site', 'compra'], emoji: '🛒', titulo: 'Verifique antes de comprar' },
     { termos: ['receita', 'dia a dia', 'cozinha'], emoji: '📝', titulo: 'Dica do dia a dia' }
   ];

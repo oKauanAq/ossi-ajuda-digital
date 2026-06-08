@@ -256,6 +256,12 @@ const RESPOSTAS = {
     passoAPasso: ['Abra o site no navegador do celular.', 'No Android, toque nos três pontos do navegador.', 'Toque em Adicionar à tela inicial.', 'No iPhone, toque em Compartilhar.', 'Toque em Adicionar à Tela de Início.'],
     atencao: '',
     quandoPedirAjuda: ''
+  },
+  bob_esponja: {
+    respostaSimples: 'Bob Esponja é um personagem de desenho animado. Ele é uma esponja amarela que vive no fundo do mar, em uma casa de abacaxi, e trabalha no Siri Cascudo. É uma série de humor feita principalmente para crianças, mas muitos adultos também gostam.',
+    passoAPasso: [],
+    atencao: '',
+    quandoPedirAjuda: ''
   }
 };
 
@@ -283,7 +289,8 @@ const INTENCOES = [
   { id: 'celular_volume', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', prioridade: 42, risco: false, limite: 4, termosFortes: ['aumentar o volume', 'volume do celular', 'aumentar o som'], termosFracos: ['volume', 'som', 'aumentar', 'baixo'], resposta: RESPOSTAS.celular_volume },
   { id: 'celular_wifi', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', prioridade: 40, risco: false, limite: 4, termosFortes: ['conectar no wifi', 'conectar no wi-fi', 'entrar no wifi'], termosFracos: ['wifi', 'wi-fi', 'internet', 'conectar'], resposta: RESPOSTAS.celular_wifi },
   { id: 'celular_print', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', prioridade: 38, risco: false, limite: 4, termosFortes: ['tirar print', 'captura de tela'], termosFracos: ['print', 'captura', 'tela'], resposta: RESPOSTAS.celular_print },
-  { id: 'instalar_pwa', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', prioridade: 36, risco: false, limite: 4, termosFortes: ['instalar na tela inicial', 'adicionar na tela inicial', 'instalar o sistema'], termosFracos: ['instalar', 'tela inicial', 'adicionar'], resposta: RESPOSTAS.instalar_pwa }
+  { id: 'instalar_pwa', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', prioridade: 36, risco: false, limite: 4, termosFortes: ['instalar na tela inicial', 'adicionar na tela inicial', 'instalar o sistema'], termosFracos: ['instalar', 'tela inicial', 'adicionar'], resposta: RESPOSTAS.instalar_pwa },
+  { id: 'bob_esponja', tipo: TIPOS_PUBLICOS.duvida_geral, origem: 'resposta_local', prioridade: 34, risco: false, limite: 7, termosFortes: ['bob esponja', 'quem e o bob esponja'], termosFracos: ['bob', 'esponja', 'desenho'], combinacoesCriticas: [['bob', 'esponja']], resposta: RESPOSTAS.bob_esponja }
 ].sort((a, b) => b.prioridade - a.prioridade);
 
 function temAlgum(t, termos = []) {
