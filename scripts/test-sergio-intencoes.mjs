@@ -113,7 +113,7 @@ const casos = [
   ['teste', 'incompreensivel', 'saudacao_ou_vaga'],
 
   // Geral
-  ['quem é o Bob Esponja', null, 'fallback'],
+  ['quem é o Bob Esponja', 'bob_esponja', 'duvida_geral'],
   ['o que é anime', null, 'fallback'],
   ['o que é mangá', null, 'fallback'],
   ['qual o oitavo planeta', null, 'fallback'],
@@ -156,6 +156,11 @@ for (const [pergunta, idEsperado, tipoEsperado] of casos) {
     assert.notEqual(payload.origem, 'ia_com_contexto', `risco não deve ir para IA com contexto em "${pergunta}"`);
   }
 }
+
+
+const respostaBobEsponja = await chamar('quem é o Bob Esponja');
+assert.ok(respostaBobEsponja.resposta.respostaSimples.includes('uma esponja amarela'), 'Bob Esponja deve ser uma esponja amarela');
+assert.ok(!respostaBobEsponja.resposta.respostaSimples.includes('um esponja amarelo'), 'Bob Esponja não deve ter concordância incorreta');
 
 const respostaSenhaGenerica = await chamar('esqueci minha senha');
 assert.deepEqual(respostaSenhaGenerica.resposta.opcoesFluxo, ['Facebook', 'Instagram', 'Gov.br', 'Banco', 'E-mail', 'WhatsApp', 'Outro aplicativo']);
