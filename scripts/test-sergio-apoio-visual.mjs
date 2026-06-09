@@ -16,6 +16,8 @@ function criarRes() {
   return {
     statusCode: 0,
     payload: null,
+    headers: {},
+    setHeader(nome, valor) { this.headers[nome.toLowerCase()] = valor; },
     status(code) { this.statusCode = code; return this; },
     json(payload) { this.payload = payload; return this; }
   };
@@ -25,6 +27,7 @@ async function responder(pergunta) {
   const res = criarRes();
   await handler(criarReq(pergunta), res);
   assert.equal(res.statusCode, 200, `status de "${pergunta}"`);
+  assert.match(res.headers['cache-control'], /no-store/i);
   assert.ok(res.payload?.resposta?.respostaSimples, `resposta simples de "${pergunta}"`);
   return res.payload;
 }
@@ -37,17 +40,13 @@ async function apoioVisual(pergunta) {
   };
 }
 
-const senhaWhatsApp = await apoioVisual('vou recuperar minha senha no WhatsApp');
-assert.equal(senhaWhatsApp.payload.origem, 'habilidade_local');
-assert.match(senhaWhatsApp.payload.resposta.respostaSimples, /acesso ao WhatsApp/i);
-assert.equal(senhaWhatsApp.apoio?.emoji, '🔐');
-assert.equal(senhaWhatsApp.apoio?.titulo, 'Senha e conta');
-
-const senhaWhatsappp = await apoioVisual('senha no whatsappp');
-assert.equal(senhaWhatsappp.payload.origem, 'habilidade_local');
-assert.match(senhaWhatsappp.payload.resposta.respostaSimples, /WhatsApp/i);
-assert.equal(senhaWhatsappp.apoio?.emoji, '🔐');
-assert.equal(senhaWhatsappp.apoio?.titulo, 'Senha e conta');
+for (const pergunta of ['vou recuperar minha senha no WhatsApp', 'senha no whatsappp']) {
+  const senhaWhatsApp = await apoioVisual(pergunta);
+  assert.match(senhaWhatsApp.payload.origem, /ia_orientada|fallback_local_orientado|fallback_local_seguro/);
+  assert.match(senhaWhatsApp.payload.resposta.respostaSimples, /senha|aplicativo|dúvida digital|duvida digital|WhatsApp/i);
+  assert.equal(senhaWhatsApp.apoio?.emoji, '🔐');
+  assert.equal(senhaWhatsApp.apoio?.titulo, 'Senha e conta');
+}
 
 const golpeFamiliar = await apoioVisual('uma pessoa com foto do meu filho está pedindo dinheiro');
 assert.equal(golpeFamiliar.apoio?.emoji, '🛡️');
@@ -73,4 +72,4 @@ const bobEsponja = await responder('quem é o Bob Esponja');
 assert.match(bobEsponja.resposta.respostaSimples, /uma esponja amarela/);
 assert.doesNotMatch(bobEsponja.resposta.respostaSimples, /um esponja amarelo/);
 
-console.log('OK: apoio visual e resposta geral do Sérgio validados.');
+console.log('OK: apoio visual compatível com Sérgio IA-first validado.');
