@@ -284,7 +284,10 @@ function initModoVozSergio(campo, enviarPerguntaDireta) {
       body: JSON.stringify({ audioBase64, mimeType: 'audio/wav' })
     });
     const dados = await resposta.json().catch(() => ({}));
-    if (!resposta.ok || !dados.ok || !dados.transcricao) throw new Error(dados.erro || 'voz_indisponivel');
+    if (!resposta.ok || !dados.ok || !dados.transcricao) {
+      if (dados.codigo) console.warn('Erro de transcrição:', dados.codigo);
+      throw new Error(dados.erro || 'voz_indisponivel');
+    }
     estadoVozSergio.transcricao = String(dados.transcricao).trim();
     textoVoz.textContent = estadoVozSergio.transcricao;
     confirmacao.classList.remove('hidden');
