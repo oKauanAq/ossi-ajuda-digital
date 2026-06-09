@@ -186,7 +186,7 @@ for (const perguntaGeral of ['Quem é Mark Zuckerberg?', 'Me faça uma lista de 
 }
 
 const respostaTioTrintaMil = await chamar('Meu tio está pedindo trinta mil reais.');
-assert.equal(respostaTioTrintaMil.origem, 'seguranca_local');
+assert.match(respostaTioTrintaMil.origem, /seguranca_(dinamica_local|local)|ia_segura/);
 assert.match(respostaTioTrintaMil.resposta.respostaSimples, /Não envie o dinheiro agora/i);
 assert.match(respostaTioTrintaMil.resposta.alertaHumano, /Obra Social Santa Isabel/);
 assert.doesNotMatch(respostaTioTrintaMil.resposta.respostaSimples, /\bpor$/i, 'resposta do tio não termina em por');
@@ -205,6 +205,37 @@ for (const pergunta of [
   assert.match(textoResposta(payload), /Obra Social Santa Isabel/i, `orienta Obra Social Santa Isabel em "${pergunta}"`);
 }
 
+
+const historicoGolpeFamiliar = [
+  { role: 'user', content: 'Uma pessoa está me pedindo dinheiro.' },
+  { role: 'assistant', content: 'Esse assunto pode envolver golpe. Não envie dinheiro antes de confirmar.' }
+];
+
+for (const [pergunta, descricao] of [
+  ['Como posso confirmar que essa pessoa é meu sobrinho?', 'continuidade de golpe familiar'],
+  ['Ela tem foto do meu filho, posso confiar?', 'foto/aparência'],
+  ['como confirmo?', 'pergunta curta de confirmação']
+]) {
+  const payload = await chamar(pergunta, historicoGolpeFamiliar);
+  assert.equal(payload.tipo, 'seguranca', `${descricao}: tipo de segurança`);
+  assert.match(textoResposta(payload), /número antigo|numero antigo|ligue|chamada de vídeo|chamada de video|outro familiar|outro parente/i, `${descricao}: passos de confirmação`);
+  assert.match(textoResposta(payload), /não confie apenas em foto|não envie dinheiro|não envie.*dúvida|não envie.*duvida/i, `${descricao}: não confiar/enviar sem confirmar`);
+  assert.doesNotMatch(payload.resposta.respostaSimples, /^Não envie o dinheiro agora\. Essa situação é arriscada e precisa ser confirmada com calma\.$/i, `${descricao}: não repete só o bloco anterior`);
+  assert.match(payload.resposta.alertaHumano, /Pix|confirme|confiança|Obra Social Santa Isabel/i, `${descricao}: alerta humano`);
+}
+
+const respostaRiscoAlto = await chamar('Vou mandar trinta mil reais para uma pessoa que parece meu sobrinho.');
+assert.equal(respostaRiscoAlto.tipo, 'seguranca', 'valor alto com aparência de familiar é segurança');
+assert.match(textoResposta(respostaRiscoAlto), /não envie|não faça pix|não faça transferência/i, 'valor alto orienta não enviar');
+assert.match(textoResposta(respostaRiscoAlto), /confirm/i, 'valor alto orienta confirmar');
+assert.match(respostaRiscoAlto.resposta.alertaHumano, /Obra Social Santa Isabel|confiança/i, 'valor alto mantém alerta humano');
+
+for (const perguntaGeral of ['Quem é Mark Zuckerberg?', 'Me faça uma lista de perguntas para treinar o uso de celular.']) {
+  const payload = await chamar(perguntaGeral, historicoGolpeFamiliar);
+  assert.notEqual(payload.tipo, 'seguranca', `histórico de golpe familiar não contamina pergunta geral em "${perguntaGeral}"`);
+  assert.doesNotMatch(textoResposta(payload), /sobrinho|não envie dinheiro|chamada de vídeo|número antigo/i, `pergunta geral não recebe orientação de golpe familiar em "${perguntaGeral}"`);
+}
+
 const respostaMark = await chamar('Quem é Mark Zuckerberg?');
 assert.equal(respostaMark.tipo, 'duvida_geral');
 assert.match(respostaMark.resposta.respostaSimples, /Facebook|Meta/i);
@@ -214,6 +245,11 @@ const respostaListaTreino = await chamar('Me faça uma lista de perguntas para t
 assert.equal(respostaListaTreino.tipo, 'duvida_geral');
 assert.match(respostaListaTreino.resposta.respostaSimples, /aumentar o volume|Wi-Fi|WhatsApp|tirar print/i);
 assert.doesNotMatch(textoResposta(respostaListaTreino), /alerta humano|Essa situação é arriscada|Link estranho pode ser golpe/i);
+
+const respostaDadosSensiveis = await chamar('Minha senha completa é 123456 e meu CPF é 12345678901.');
+assert.equal(respostaDadosSensiveis.tipo, 'seguranca');
+assert.equal(respostaDadosSensiveis.origem, 'bloqueio_local');
+assert.match(textoResposta(respostaDadosSensiveis), /não compartilhe senha|cpf completo|cartão|documento/i);
 
 const respostaRepitaSemHistorico = await chamar('repita');
 assert.match(respostaRepitaSemHistorico.resposta.respostaSimples, /preciso que você me diga qual era a dúvida/i);

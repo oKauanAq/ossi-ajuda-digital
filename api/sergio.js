@@ -150,6 +150,13 @@ const RESPOSTAS = {
     atencao: 'Não fale senha, código, CPF ou dados do banco.',
     quandoPedirAjuda: 'Peça ajuda se for sobre dinheiro, senha ou golpe.'
   },
+  dados_sensiveis: {
+    respostaSimples: 'Por segurança, não compartilhe senha, código, CPF completo, cartão, documento, foto de documento ou chave de banco aqui.',
+    passoAPasso: ['Apague esses dados da conversa se puder.', 'Use apenas o aplicativo oficial do serviço.', 'Peça ajuda a alguém de confiança se alguém pediu esses dados.'],
+    atencao: 'Nenhum atendimento seguro precisa receber sua senha completa ou código de SMS por mensagem.',
+    alertaHumano: ALERTA_HUMANO,
+    quandoPedirAjuda: 'Peça ajuda imediatamente se você já enviou senha, código, cartão ou documento para alguém.'
+  },
   senha_generica: {
     respostaSimples: 'Posso ajudar. Primeiro preciso saber de qual aplicativo ou conta estamos falando.',
     passoAPasso: ['Escolha uma opção abaixo ou escreva o nome do aplicativo.', 'Não envie sua senha para ninguém.', 'Não envie código recebido por SMS ou WhatsApp.'],
@@ -226,6 +233,13 @@ const RESPOSTAS = {
     atencao: 'Golpistas podem usar foto, nome ou aparência de familiares para pedir dinheiro.',
     alertaHumano: '⚠️ Antes de enviar dinheiro, fale pessoalmente com um familiar de confiança ou peça ajuda na Obra Social Santa Isabel.',
     quandoPedirAjuda: 'Peça ajuda sempre que pedirem dinheiro alto, Pix urgente, senha, código ou documento.'
+  },
+  confirmar_identidade_familiar: {
+    respostaSimples: 'Não confie apenas em foto, nome ou mensagem. Confirme por outro caminho antes de enviar dinheiro.',
+    passoAPasso: ['Ligue para o número antigo da pessoa, aquele que você já conhecia.', 'Faça uma pergunta que só seu familiar saberia responder.', 'Se possível, peça uma chamada de vídeo.', 'Confirme com outro familiar de confiança.', 'Não envie dinheiro enquanto estiver em dúvida.', 'Se precisar, peça ajuda na Obra Social Santa Isabel.'],
+    atencao: 'Golpistas podem usar foto, nome e até voz para parecer um familiar.',
+    alertaHumano: '⚠️ Se há pedido de dinheiro, confirme com uma pessoa de confiança antes de qualquer Pix.',
+    quandoPedirAjuda: 'Peça ajuda se houver urgência, valor alto, pedido de código, senha ou documento.'
   },
   link_suspeito: {
     respostaSimples: 'Link estranho pode ser golpe. Não clique e não preencha dados.',
@@ -338,7 +352,8 @@ const RESPOSTAS = {
 
 const INTENCOES = [
   { id: 'incompreensivel', tipo: TIPOS_PUBLICOS.saudacao_ou_vaga, origem: 'habilidade_local', prioridade: 120, risco: false, limite: 1, termosFortes: ['tastando', 'pesquise me senhora', 'escusei me senhora', 'me senhora'], termosFracos: ['abc', 'oi'], resposta: RESPOSTAS.incompreensivel },
-  { id: 'dinheiro_familiar_ou_valor_alto', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', prioridade: 125, risco: true, limite: 7, termosFortes: ['meu tio esta pedindo trinta mil reais', 'tio esta pedindo trinta mil', 'pessoa com cara do meu sobrinho', 'parece meu sobrinho', 'pedindo dinheiro', 'pedindo pix', 'pediu dinheiro', 'pediu pix', 'trinta mil', 'tres mil', '30 mil', '3000', 'valor alto'], termosFracos: ['tio', 'tia', 'sobrinho', 'sobrinha', 'filho', 'filha', 'neto', 'neta', 'mae', 'pai', 'irmao', 'irma', 'familiar', 'parente', 'pessoa', 'cara', 'foto', 'parece', 'pedindo', 'pediu', 'dinheiro', 'pix', 'trinta', 'tres', 'mil', '3000', '30', 'valor', 'alto'], combinacoesCriticas: [['tio', 'pedindo'], ['tia', 'pedindo'], ['sobrinho', 'pedindo'], ['sobrinha', 'pedindo'], ['filho', 'pedindo'], ['filha', 'pedindo'], ['neto', 'pedindo'], ['neta', 'pedindo'], ['mae', 'pedindo'], ['pai', 'pedindo'], ['irmao', 'pedindo'], ['irma', 'pedindo'], ['familiar', 'dinheiro'], ['parente', 'dinheiro'], ['pessoa', 'cara', 'sobrinho'], ['parece', 'meu'], ['foto', 'dinheiro'], ['pedindo', 'trinta'], ['pedindo', 'tres'], ['valor', 'alto']], resposta: RESPOSTAS.dinheiro_familiar_ou_valor_alto },
+  { id: 'confirmar_identidade_familiar', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_dinamica', prioridade: 130, risco: true, dinamicaSegura: true, limite: 7, termosFortes: ['como posso confirmar que e meu sobrinho', 'como confirmar se e meu sobrinho', 'como saber se e meu filho', 'como confirmar se e meu parente', 'quero saber se e meu parente ou nao', 'como saber se essa pessoa e real', 'ele mandou foto posso confiar', 'ela tem foto do meu filho posso confiar', 'tem cara do meu sobrinho', 'o que eu pergunto'], termosFracos: ['confirmar', 'confirmo', 'saber', 'pergunto', 'pergunta', 'confiar', 'foto', 'aparencia', 'cara', 'real', 'verdadeiro', 'verdadeira', 'numero', 'sobrinho', 'sobrinha', 'filho', 'filha', 'neto', 'neta', 'mae', 'pai', 'irmao', 'irma', 'familiar', 'parente'], combinacoesCriticas: [['confirmar', 'sobrinho'], ['confirmar', 'parente'], ['confirmar', 'familiar'], ['saber', 'filho'], ['saber', 'parente'], ['saber', 'pessoa', 'real'], ['foto', 'confiar'], ['foto', 'filho'], ['cara', 'sobrinho'], ['numero', 'verdadeiro'], ['o', 'que', 'pergunto']], resposta: RESPOSTAS.confirmar_identidade_familiar, contexto: 'confirmação de identidade em possível golpe familiar', regrasSeguranca: ['Não confiar apenas em foto, nome, mensagem ou voz.', 'Confirmar por número antigo/canal já conhecido.', 'Fazer pergunta que só o familiar saberia.', 'Pedir chamada de vídeo quando possível.', 'Confirmar com outro familiar de confiança.', 'Nunca orientar envio de dinheiro enquanto houver dúvida.', 'Orientar ajuda na Obra Social Santa Isabel.'], sugestoes: ['ligar para número antigo', 'pergunta privada da família', 'chamada de vídeo', 'confirmar com outro parente', 'não enviar dinheiro'], fallbackLocal: RESPOSTAS.confirmar_identidade_familiar },
+  { id: 'dinheiro_familiar_ou_valor_alto', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_dinamica', prioridade: 125, risco: true, dinamicaSegura: true, limite: 7, termosFortes: ['meu tio esta pedindo trinta mil reais', 'tio esta pedindo trinta mil', 'pessoa com cara do meu sobrinho', 'parece meu sobrinho', 'pedindo dinheiro', 'pedindo pix', 'pediu dinheiro', 'pediu pix', 'trinta mil', 'tres mil', '30 mil', '3000', 'valor alto'], termosFracos: ['tio', 'tia', 'sobrinho', 'sobrinha', 'filho', 'filha', 'neto', 'neta', 'mae', 'pai', 'irmao', 'irma', 'familiar', 'parente', 'pessoa', 'cara', 'foto', 'parece', 'pedindo', 'pediu', 'dinheiro', 'pix', 'trinta', 'tres', 'mil', '3000', '30', 'valor', 'alto'], combinacoesCriticas: [['tio', 'pedindo'], ['tia', 'pedindo'], ['sobrinho', 'pedindo'], ['sobrinha', 'pedindo'], ['filho', 'pedindo'], ['filha', 'pedindo'], ['neto', 'pedindo'], ['neta', 'pedindo'], ['mae', 'pedindo'], ['pai', 'pedindo'], ['irmao', 'pedindo'], ['irma', 'pedindo'], ['familiar', 'dinheiro'], ['parente', 'dinheiro'], ['pessoa', 'cara', 'sobrinho'], ['parece', 'meu'], ['foto', 'dinheiro'], ['pedindo', 'trinta'], ['pedindo', 'tres'], ['valor', 'alto']], resposta: RESPOSTAS.dinheiro_familiar_ou_valor_alto, contexto: 'pedido de dinheiro em possível golpe familiar ou valor alto', regrasSeguranca: ['Bloquear envio de dinheiro enquanto houver dúvida.', 'Confirmar identidade por outro caminho.', 'Não clicar em links nem enviar senha, código, CPF ou documento.', 'Manter alerta humano em destaque.'], sugestoes: ['parar antes do Pix', 'ligar para número conhecido', 'confirmar com familiar', 'Obra Social Santa Isabel'], fallbackLocal: RESPOSTAS.dinheiro_familiar_ou_valor_alto },
   { id: 'pix_valor_alto', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', prioridade: 118, risco: true, limite: 7, termosFortes: ['vou mandar 3000 no pix', 'vou fazer pix de 3000', 'vou mandar tres mil no pix', 'mandar dinheiro para desconhecido', 'pessoa desconhecida pediu dinheiro', 'pix para pessoa que nao conheco', 'pediram dinheiro urgente'], termosFracos: ['pix', 'dinheiro', 'desconhecido', 'desconhecida', 'urgente', 'valor', 'alto', '3000', 'tres', 'mil', 'mandar', 'enviar', 'pessoa', 'conheco', 'conheço'], combinacoesCriticas: [['pix', '3000'], ['pix', 'tres', 'mil'], ['dinheiro', 'desconhecido'], ['pessoa', 'desconhecida'], ['pix', 'desconhecido'], ['dinheiro', 'urgente'], ['valor', 'alto']], resposta: RESPOSTAS.pix_valor_alto },
   { id: 'golpe_familiar_falso', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', prioridade: 115, risco: true, limite: 9, termosFortes: ['foto do meu filho', 'foto do meu irmao', 'foto de familiar', 'numero novo dizendo que e minha mae', 'numero novo dizendo que e meu filho', 'outro numero', 'numero novo'], termosFracos: ['filho', 'filha', 'irmao', 'irma', 'mae', 'pai', 'familiar', 'parente', 'foto', 'pediu pix', 'pediu dinheiro', 'pedindo dinheiro', 'pedindo pix'], combinacoesCriticas: [['foto', 'familiar'], ['foto', 'dinheiro'], ['foto', 'pix'], ['numero novo', 'mae'], ['numero novo', 'filho'], ['outro numero', 'dinheiro'], ['familiar', 'dinheiro']], resposta: RESPOSTAS.golpe_familiar_falso },
   { id: 'pix_urgente_golpe', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', prioridade: 110, risco: true, limite: 7, termosFortes: ['me pediram pix urgente', 'pediram dinheiro pelo whatsapp', 'numero pediu pix', 'pessoa pediu dinheiro', 'pediu pix urgente'], termosFracos: ['pix', 'dinheiro', 'urgente', 'whatsapp', 'pediram', 'pediu', 'pessoa'], combinacoesCriticas: [['pix', 'urgente'], ['dinheiro', 'whatsapp'], ['pediu', 'pix'], ['pediram', 'dinheiro']], resposta: RESPOSTAS.pix_urgente_golpe },
@@ -558,6 +573,60 @@ function respostaIntencaoLocal(intencao) {
   return pacote(intencao.tipo, respostaPadrao(resposta), intencao.origem || 'habilidade_local');
 }
 
+function montarIntencaoParaIA(intencao = {}) {
+  return {
+    id: intencao.id,
+    tipo: intencao.tipo,
+    risco: Boolean(intencao.risco),
+    contexto: intencao.contexto || '',
+    regrasSeguranca: intencao.regrasSeguranca || [],
+    sugestoes: intencao.sugestoes || [],
+    fallbackLocal: intencao.fallbackLocal || intencao.resposta || null
+  };
+}
+
+function respostaFallbackIntencao(intencao, origem = 'seguranca_dinamica_local') {
+  const resposta = { ...(intencao?.fallbackLocal || intencao?.resposta || RESPOSTAS.incompreensivel) };
+  if ((intencao?.tipo === TIPOS_PUBLICOS.seguranca || intencao?.risco) && !resposta.alertaHumano) {
+    resposta.alertaHumano = ALERTA_HUMANO;
+  }
+  return pacote(intencao?.tipo || TIPOS_PUBLICOS.fallback, respostaPadrao(resposta), origem);
+}
+
+function ehPerguntaConfirmacaoFamiliar(perguntaAtual = '') {
+  const t = normalizarTexto(perguntaAtual);
+  return /(como confirmo|como posso confirmar|como confirmar|o que pergunto|que pergunta faco|posso confiar|e se .*foto|mandou foto|mandar foto|foto.*confiar|numero.*verdadeiro|pessoa.*real)/.test(t);
+}
+
+function historicoIndicaGolpeFamiliar(historico = []) {
+  return historico
+    .slice(-6)
+    .filter((m) => m && m.role === 'user' && typeof m.content === 'string' && !temDadoPessoal(m.content))
+    .some((m) => {
+      const intencao = detectarIntencao(m.content);
+      const t = normalizarTexto(m.content);
+      return ['dinheiro_familiar_ou_valor_alto', 'golpe_familiar_falso', 'pix_urgente_golpe', 'pix_valor_alto'].includes(intencao?.id)
+        || /(?:pessoa|familiar|parente|sobrinho|sobrinha|filho|filha|neto|neta|mae|pai|irmao|irma).{0,60}(dinheiro|pix|transferencia|deposito)|(?:dinheiro|pix|transferencia|deposito).{0,60}(pessoa|familiar|parente|sobrinho|sobrinha|filho|filha|neto|neta|mae|pai|irmao|irma)/.test(t);
+    });
+}
+
+function detectarIntencaoComHistorico(perguntaOriginal = '', historico = []) {
+  const direta = detectarIntencao(perguntaOriginal);
+  if (direta) return direta;
+  if (ehPerguntaConfirmacaoFamiliar(perguntaOriginal) && historicoIndicaGolpeFamiliar(historico)) {
+    const base = INTENCOES.find((i) => i.id === 'confirmar_identidade_familiar');
+    return { ...base, score: 999, textoNormalizado: normalizarTexto(perguntaOriginal), origem: 'continuidade_segura' };
+  }
+  return null;
+}
+
+function contemDadoSensivelCompartilhado(texto = '') {
+  const t = normalizarTexto(texto);
+  return /(minha senha (e|eh)|senha completa|codigo (e|eh)|codigo de sms|meu cpf (e|eh)|cpf completo|numero do cartao|cartao (e|eh)|foto do documento|meu documento|chave do banco|dados bancarios)/.test(t)
+    || /\b\d{11}\b/.test(t)
+    || /\b\d{4}[ -]?\d{4}[ -]?\d{4}[ -]?\d{4}\b/.test(t);
+}
+
 function classificarIntencao(pergunta) {
   const t = normalizarTexto(pergunta);
   if (contemTermoRisco(t)) return TIPOS_PUBLICOS.seguranca;
@@ -587,16 +656,30 @@ function limitarRespostaGeral(resposta = {}) {
   });
 }
 
-function parseIA(raw = '') {
+function extrairJsonIA(raw = '') {
   const semMarkdown = String(raw).replace(/```json|```/gi, '').trim();
   const i = semMarkdown.indexOf('{');
   const f = semMarkdown.lastIndexOf('}');
-  const blocos = [semMarkdown, (i >= 0 && f > i) ? semMarkdown.slice(i, f + 1) : ''];
+  return { semMarkdown, blocos: [semMarkdown, (i >= 0 && f > i) ? semMarkdown.slice(i, f + 1) : ''] };
+}
+
+function parseIA(raw = '') {
+  const { semMarkdown, blocos } = extrairJsonIA(raw);
   for (const b of blocos) {
     if (!b) continue;
     try { return limitarRespostaGeral(JSON.parse(b)); } catch {}
   }
   if (semMarkdown.length > 10) return limitarRespostaGeral({ respostaSimples: semMarkdown, passoAPasso: [], atencao: '', quandoPedirAjuda: '' });
+  return null;
+}
+
+function parseIADinamica(raw = '', defaults = {}) {
+  const { semMarkdown, blocos } = extrairJsonIA(raw);
+  for (const b of blocos) {
+    if (!b) continue;
+    try { return respostaPadrao(JSON.parse(b), defaults); } catch {}
+  }
+  if (semMarkdown.length > 10) return respostaPadrao({ respostaSimples: semMarkdown }, defaults);
   return null;
 }
 
@@ -622,6 +705,52 @@ async function chamarNvidia(pergunta, contextoFaq, intencao, historicoSeguro) {
   return parseIA(data?.choices?.[0]?.message?.content || '');
 }
 
+async function chamarNvidiaComPrompt(system, user, parser, maxTokens = 650) {
+  const payload = {
+    model: MODELO_NVIDIA,
+    temperature: 0.15,
+    max_tokens: maxTokens,
+    extra_body: { chat_template_kwargs: { enable_thinking: false } },
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user }
+    ]
+  };
+  const resp = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!resp.ok) throw new Error('nvidia_http');
+  const data = await resp.json();
+  return parser(data?.choices?.[0]?.message?.content || '');
+}
+
+async function gerarRespostaDinamicaSegura(perguntaAtual, intencao, historicoSeguro = []) {
+  if (!process.env.NVIDIA_API_KEY) return respostaFallbackIntencao(intencao);
+
+  const fallback = respostaPadrao(intencao.fallbackLocal || intencao.resposta || {});
+  const system = [
+    'Você é Sérgio, assistente acolhedor da Obra Social Santa Isabel para idosos.',
+    'Responda em português brasileiro simples, com frases curtas e tom calmo.',
+    'Responda a PERGUNTA ATUAL de forma específica. Se for continuidade, use o histórico apenas para entender o assunto e NÃO repita automaticamente o bloco anterior.',
+    'Não invente fatos. Não peça senha completa, código SMS/WhatsApp, CPF completo, número de cartão, documento, foto de documento, chave de banco nem dados bancários.',
+    'Se houver pedido de dinheiro ou dúvida de identidade, nunca recomende enviar dinheiro; oriente confirmar por outro caminho e manter alerta humano.',
+    'Mantenha alertaHumano quando o risco for verdadeiro. Não indique busca web; diga que a confirmação deve ser por canais conhecidos e pessoas de confiança.',
+    'Retorne SOMENTE JSON válido no formato: {"respostaSimples":"...","passoAPasso":[],"atencao":"","quandoPedirAjuda":"","alertaHumano":"","opcoesFluxo":[]}.'
+  ].join(' ');
+  const user = JSON.stringify({
+    perguntaAtual,
+    intencao: montarIntencaoParaIA(intencao),
+    historicoSeguro,
+    formatoObrigatorio: ['respostaSimples', 'passoAPasso', 'atencao', 'quandoPedirAjuda', 'alertaHumano', 'opcoesFluxo']
+  });
+  const resposta = await chamarNvidiaComPrompt(system, user, (raw) => parseIADinamica(raw, fallback));
+  if (!resposta?.respostaSimples) throw new Error('ia_dinamica_invalida');
+  if (intencao.risco && !resposta.alertaHumano) resposta.alertaHumano = fallback.alertaHumano || ALERTA_HUMANO;
+  return pacote(intencao.tipo, respostaPadrao(resposta, fallback), 'ia_segura');
+}
+
 export default async function handler(req, res) {
   res.setHeader?.('Cache-Control', 'no-store, max-age=0');
   res.setHeader?.('Pragma', 'no-cache');
@@ -633,7 +762,22 @@ export default async function handler(req, res) {
 
   if (ehPedidoRepeticao(perguntaOriginal)) return res.status(200).json(respostaRepeticao(historico));
 
-  const intencaoLocal = detectarIntencao(perguntaOriginal);
+  if (contemDadoSensivelCompartilhado(perguntaOriginal)) {
+    return res.status(200).json(pacote(TIPOS_PUBLICOS.seguranca, respostaPadrao(RESPOSTAS.dados_sensiveis), 'bloqueio_local'));
+  }
+
+  const intencaoLocal = detectarIntencaoComHistorico(perguntaOriginal, historico);
+  if (intencaoLocal?.dinamicaSegura) {
+    const historicoSeguro = historico
+      .slice(-4)
+      .filter((m) => m && typeof m.content === 'string' && !temDadoPessoal(m.content))
+      .map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content.slice(0, 180) }));
+    try {
+      return res.status(200).json(await gerarRespostaDinamicaSegura(perguntaOriginal, intencaoLocal, historicoSeguro));
+    } catch {
+      return res.status(200).json(respostaFallbackIntencao(intencaoLocal));
+    }
+  }
   if (intencaoLocal) return res.status(200).json(respostaIntencaoLocal(intencaoLocal));
 
   if (contemTermoRisco(pergunta)) return res.status(200).json(respostaSegurancaGenerica());
@@ -670,4 +814,4 @@ export default async function handler(req, res) {
   }
 }
 
-export { INTENCOES, TIPOS_PUBLICOS, detectarIntencao, normalizarTexto, contemTermoRisco, ehContinuidadeCurta, pareceRespostaTruncada };
+export { INTENCOES, TIPOS_PUBLICOS, detectarIntencao, detectarIntencaoComHistorico, normalizarTexto, contemTermoRisco, ehContinuidadeCurta, pareceRespostaTruncada, gerarRespostaDinamicaSegura };
