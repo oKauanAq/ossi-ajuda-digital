@@ -1,6 +1,3 @@
-import fs from 'fs';
-import path from 'path';
-
 const MODELO_PADRAO = 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning';
 const MODELO_NVIDIA = process.env.NVIDIA_MODEL || MODELO_PADRAO;
 
@@ -13,18 +10,10 @@ const TIPOS_PUBLICOS = {
   fallback: 'fallback'
 };
 
-const APLICATIVOS = ['whatsapp', 'facebook', 'instagram', 'gov.br', 'banco', 'email', 'e-mail'];
-const TERMOS_RISCO = [
-  'senha', 'codigo', 'token', 'pix', 'banco', 'dinheiro', 'pagamento', 'pagar', 'transferencia',
-  'deposito', 'boleto', 'link suspeito', 'link estranho', 'cpf', 'cartao', 'documento', 'rg',
-  'loja', 'site', 'golpe', 'numero desconhecido', 'numero novo', 'familiar pedindo dinheiro',
-  'pedindo dinheiro', 'pedindo pix', 'pediu dinheiro', 'pediu pix', 'valor alto', 'urgente',
-  'desconhecido', 'pessoa desconhecida', 'numero novo', 'foto do meu filho', 'foto de', 'pessoa com cara de',
-  'parece meu', 'familiar', 'parente', 'tio', 'tia', 'sobrinho', 'sobrinha', 'filho', 'filha', 'neto', 'neta', 'mae', 'pai', 'irmao', 'irma',
-  'trinta mil', 'tres mil', '30 mil', '3000', 'medo', 'confuso', 'confusa', 'inseguro', 'insegura'
-];
-
 const ALERTA_HUMANO = '⚠️ Essa situação é arriscada. Antes de enviar dinheiro, senha ou código, fale pessoalmente com um familiar de confiança ou peça ajuda na Obra Social Santa Isabel.';
+const CAMPOS_RESPOSTA = ['respostaSimples', 'passoAPasso', 'atencao', 'quandoPedirAjuda', 'alertaHumano', 'opcoesFluxo'];
+const PALAVRAS_FINAIS_TRUNCADAS = new Set(['por', 'para', 'com', 'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas', 'se', 'que', 'porque', 'quando', 'caso', 'for']);
+const RESPOSTA_TRUNCADA_FALLBACK = 'Desculpe, minha resposta anterior pode ter saído incompleta. Não faça nada com pressa e peça ajuda a alguém de confiança antes de continuar.';
 
 function aplicarCorrecoesComuns(t = '') {
   let texto = t;
@@ -39,15 +28,10 @@ function aplicarCorrecoesComuns(t = '') {
     [/\bseguranca\b/g, 'seguranca'],
     [/\bcodigo\b/g, 'codigo']
   ];
-
-  substituicoes.forEach(([padrao, valor]) => {
-    texto = texto.replace(padrao, valor);
-  });
-
+  substituicoes.forEach(([padrao, valor]) => { texto = texto.replace(padrao, valor); });
   if (/\b(senha|conta|entrar|recuperar|esqueci|login|acesso)\b/.test(texto)) {
     texto = texto.replace(/\bminha senhora\b/g, 'minha senha');
   }
-
   return texto;
 }
 
@@ -83,9 +67,6 @@ function limparCampoResposta(valor = '') {
   return limiteSeguro.replace(/\s+\S*$/, '').trim().replace(/[,:;\-–—]+$/, '').trim() + '.';
 }
 
-const PALAVRAS_FINAIS_TRUNCADAS = new Set(['por', 'para', 'com', 'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas', 'se', 'que', 'porque', 'quando', 'caso', 'for']);
-const RESPOSTA_TRUNCADA_FALLBACK = 'Desculpe, minha resposta anterior pode ter saído incompleta. Não faça nada com pressa e peça ajuda a alguém de confiança antes de continuar.';
-
 function pareceRespostaTruncada(texto = '') {
   const limpo = String(texto).trim();
   if (!limpo) return false;
@@ -113,7 +94,7 @@ function respostaPadrao(resposta = {}, defaults = {}) {
     }).slice(0, 6)
     : [];
 
-  const base = {
+  return {
     respostaSimples: garantirRespostaCompleta(resposta.respostaSimples || defaults.respostaSimples || 'Não consegui entender bem. Pode perguntar de outro jeito?', defaults.respostaSimples || RESPOSTA_TRUNCADA_FALLBACK),
     passoAPasso: passos,
     atencao: limparCampoResposta(resposta.atencao || defaults.atencao || ''),
@@ -121,680 +102,266 @@ function respostaPadrao(resposta = {}, defaults = {}) {
     quandoPedirAjuda: limparCampoResposta(resposta.quandoPedirAjuda || defaults.quandoPedirAjuda || ''),
     opcoesFluxo: Array.isArray(resposta.opcoesFluxo) ? resposta.opcoesFluxo.map((o) => limparCampoResposta(o)).filter(Boolean).slice(0, 8) : []
   };
-
-  const primeiroPasso = normalizarTexto(base.passoAPasso[0] || '');
-  const respostaNorm = normalizarTexto(base.respostaSimples);
-  if (primeiroPasso && respostaNorm && (primeiroPasso.includes(respostaNorm) || respostaNorm.includes(primeiroPasso))) {
-    base.passoAPasso = base.passoAPasso.slice(1);
-  }
-
-  const atencaoNorm = normalizarTexto(base.atencao);
-  const alertaNorm = normalizarTexto(base.alertaHumano);
-  const ajudaNorm = normalizarTexto(base.quandoPedirAjuda);
-  if (alertaNorm && ajudaNorm && (alertaNorm.includes(ajudaNorm) || ajudaNorm.includes(alertaNorm))) {
-    base.quandoPedirAjuda = '';
-  }
-  if (atencaoNorm && ajudaNorm && (atencaoNorm.includes(ajudaNorm) || ajudaNorm.includes(atencaoNorm))) {
-    base.quandoPedirAjuda = '';
-  }
-
-  return base;
 }
 
-const pacote = (tipo, resposta, origem) => ({ tipo, resposta, origem });
+const pacote = (tipo, resposta, origem, metadados = {}) => ({ tipo, resposta: respostaPadrao(resposta), origem, ...metadados });
 
 const RESPOSTAS = {
   incompreensivel: {
     respostaSimples: 'Não entendi bem. Pode repetir com calma?',
-    passoAPasso: ['Fale uma frase curta.', 'Diga o nome do aplicativo, como WhatsApp, Facebook ou banco.', 'Se preferir, escreva sua dúvida.'],
+    passoAPasso: ['Fale uma frase curta.', 'Diga o nome do aplicativo, como WhatsApp, Instagram, banco ou celular.', 'Se preferir, escreva sua dúvida.'],
     atencao: 'Não fale senha, código, CPF ou dados do banco.',
     quandoPedirAjuda: 'Peça ajuda se for sobre dinheiro, senha ou golpe.'
   },
   dados_sensiveis: {
     respostaSimples: 'Por segurança, não compartilhe senha, código, CPF completo, cartão, documento, foto de documento ou chave de banco aqui.',
-    passoAPasso: ['Apague esses dados da conversa se puder.', 'Use apenas o aplicativo oficial do serviço.', 'Peça ajuda a alguém de confiança se alguém pediu esses dados.'],
+    passoAPasso: ['Apague esses dados da conversa se puder.', 'Não envie esses dados por WhatsApp, ligação ou link.', 'Use apenas o aplicativo oficial do serviço.', 'Peça ajuda a alguém de confiança se alguém pediu esses dados.'],
     atencao: 'Nenhum atendimento seguro precisa receber sua senha completa ou código de SMS por mensagem.',
     alertaHumano: ALERTA_HUMANO,
-    quandoPedirAjuda: 'Peça ajuda imediatamente se você já enviou senha, código, cartão ou documento para alguém.'
+    quandoPedirAjuda: 'Peça ajuda imediatamente se você já enviou senha, código, cartão, documento ou CPF completo para alguém.'
   },
-  senha_generica: {
-    respostaSimples: 'Posso ajudar. Primeiro preciso saber de qual aplicativo ou conta estamos falando.',
-    passoAPasso: ['Escolha uma opção abaixo ou escreva o nome do aplicativo.', 'Não envie sua senha para ninguém.', 'Não envie código recebido por SMS ou WhatsApp.'],
-    atencao: 'Nunca compartilhe senha, código, CPF, cartão ou documento.',
-    quandoPedirAjuda: 'Peça ajuda se aparecer cobrança, link estranho ou pedido de código.',
-    opcoesFluxo: ['Facebook', 'Instagram', 'Gov.br', 'Banco', 'E-mail', 'WhatsApp', 'Outro aplicativo']
-  },
-  senha_whatsapp: {
-    respostaSimples: 'Entendi. Vamos cuidar do acesso ao WhatsApp com segurança.',
-    passoAPasso: ['Abra o WhatsApp pelo aplicativo oficial.', 'Siga a recuperação indicada na tela.', 'Se aparecer código por SMS, não envie esse código para ninguém.', 'Se perdeu o número antigo, peça ajuda antes de tentar recuperar.', 'Não clique em links prometendo recuperar conta.'],
-    atencao: 'Golpistas podem pedir código do WhatsApp para roubar sua conta.',
-    quandoPedirAjuda: 'Peça ajuda se alguém pedir código, dinheiro ou mandar link estranho.'
-  },
-  senha_facebook: {
-    respostaSimples: 'Para recuperar o Facebook, use apenas o aplicativo ou site oficial.',
-    passoAPasso: ['Abra o aplicativo oficial do Facebook ou digite facebook.com no navegador.', 'Toque em Esqueci a senha.', 'Digite seu e-mail ou telefone.', 'Siga o código enviado para você.', 'Crie uma senha nova e forte.', 'Não passe o código para ninguém.'],
-    atencao: 'Não clique em links de recuperação enviados por desconhecidos.',
-    quandoPedirAjuda: 'Peça ajuda se aparecer cobrança, ameaça ou pedido de código.'
-  },
-  senha_instagram: {
-    respostaSimples: 'Para recuperar o Instagram, use apenas o aplicativo oficial.',
-    passoAPasso: ['Abra o Instagram oficial.', 'Toque em Esqueceu a senha ou Obter ajuda para entrar.', 'Informe seu telefone, e-mail ou usuário.', 'Siga as instruções recebidas.', 'Crie uma senha nova.', 'Não compartilhe código com ninguém.'],
-    atencao: 'Golpistas podem fingir suporte do Instagram.',
-    quandoPedirAjuda: 'Peça ajuda se pedirem pagamento ou código fora do aplicativo.'
-  },
-  senha_gov: {
-    respostaSimples: 'Para recuperar a senha do Gov.br, use somente o aplicativo ou site oficial gov.br.',
-    passoAPasso: ['Abra o aplicativo Gov.br ou o site gov.br.', 'Toque em Entrar com gov.br.', 'Escolha Esqueci minha senha.', 'Siga a confirmação indicada na tela.', 'Crie uma senha nova.', 'Não envie foto de documento para pessoa desconhecida.'],
-    atencao: 'Gov.br dá acesso a serviços importantes. Tenha calma e use só canais oficiais.',
-    quandoPedirAjuda: 'Peça ajuda se alguém oferecer recuperação por link ou cobrar dinheiro.'
-  },
-  senha_banco: {
-    respostaSimples: 'Para senha de banco, faça tudo pelo aplicativo oficial ou pela agência.',
-    passoAPasso: ['Abra apenas o aplicativo oficial do seu banco.', 'Procure a opção Esqueci minha senha ou Ajuda.', 'Não informe senha, código ou token por telefone ou mensagem.', 'Se tiver dúvida, ligue para o número no verso do cartão.', 'Se possível, vá até uma agência ou peça ajuda a alguém de confiança.'],
-    atencao: 'Banco nunca precisa que você envie senha completa por WhatsApp.',
-    quandoPedirAjuda: 'Peça ajuda antes de instalar aplicativo, fazer Pix ou confirmar código.'
-  },
-  senha_email: {
-    respostaSimples: 'Para recuperar e-mail, use a tela oficial do seu provedor.',
-    passoAPasso: ['Abra o aplicativo ou site oficial do e-mail.', 'Toque em Esqueci a senha.', 'Confirme pelo telefone ou e-mail de recuperação.', 'Crie uma senha nova.', 'Ative verificação em duas etapas se aparecer essa opção.'],
-    atencao: 'Quem entra no seu e-mail pode tentar acessar outras contas.',
-    quandoPedirAjuda: 'Peça ajuda se houver mensagem de invasão ou pedido de código.'
-  },
-  pix_como_fazer: {
-    respostaSimples: 'Você pode fazer Pix com segurança pelo aplicativo oficial do banco.',
-    passoAPasso: ['Abra o aplicativo oficial do banco.', 'Toque em Pix.', 'Escolha pagar, transferir ou ler QR Code.', 'Confira nome, valor e banco da pessoa antes de confirmar.', 'Digite sua senha apenas dentro do aplicativo oficial.', 'Guarde o comprovante.'],
-    atencao: 'Se o nome ou valor estiver diferente, pare e não confirme.',
-    quandoPedirAjuda: 'Peça ajuda antes de fazer Pix alto ou urgente.'
-  },
-  pix_valor_alto: {
-    respostaSimples: 'Essa atitude é arriscada, principalmente se você não conhece bem a pessoa. Não envie o Pix agora.',
-    passoAPasso: ['Pare e não confirme o Pix com pressa.', 'Confira o nome, o valor e a história com calma.', 'Confirme por outro meio, como ligação para um número que você já conhece.', 'Se for pessoa desconhecida, não envie dinheiro antes de pedir ajuda.', 'Fale com um familiar de confiança ou com a Obra Social Santa Isabel antes de continuar.'],
-    atencao: 'Pix de valor alto, urgente ou para pessoa desconhecida pode ser golpe.',
+  risco_real: {
+    respostaSimples: 'Não faça pagamento nem envie dados agora. Essa situação pode ser golpe e precisa ser confirmada com calma.',
+    passoAPasso: ['Pare antes de fazer Pix, transferência ou clicar em link.', 'Confirme a história por um número antigo ou canal que você já conhece.', 'Fale com outro familiar ou pessoa de confiança.', 'Não envie senha, código, CPF, cartão ou documento.', 'Se continuar em dúvida, peça ajuda na Obra Social Santa Isabel.'],
+    atencao: 'Golpistas usam pressa, foto de familiar, número novo ou pedido de segredo para enganar.',
     alertaHumano: ALERTA_HUMANO,
-    quandoPedirAjuda: 'Peça ajuda antes de enviar qualquer valor alto ou urgente.'
+    quandoPedirAjuda: 'Peça ajuda antes de enviar qualquer dinheiro ou dado pessoal.'
   },
-  pix_urgente_golpe: {
-    respostaSimples: 'Não envie dinheiro agora. Pedido de Pix urgente pode ser golpe.',
-    passoAPasso: ['Pare antes de pagar.', 'Ligue para a pessoa por um número que você já conhece.', 'Confirme a história com calma.', 'Não use o número novo como única confirmação.', 'Peça ajuda a alguém de confiança.'],
-    atencao: 'Golpistas usam pressa para fazer você pagar sem pensar.',
-    alertaHumano: ALERTA_HUMANO,
-    quandoPedirAjuda: 'Peça ajuda sempre que pedirem dinheiro por mensagem.'
+  pix_seguro: {
+    respostaSimples: 'Você pode fazer Pix com mais segurança usando somente o aplicativo oficial do banco e conferindo tudo antes de confirmar.',
+    passoAPasso: ['Abra apenas o aplicativo oficial do seu banco.', 'Entre na área Pix.', 'Digite a chave, leia o QR Code ou escolha o contato com calma.', 'Confira nome, banco e valor antes de confirmar.', 'Digite sua senha somente dentro do aplicativo oficial.', 'Guarde o comprovante.'],
+    atencao: 'Se o pedido veio com urgência, número novo, ameaça ou história estranha, pare e confirme antes.',
+    quandoPedirAjuda: 'Peça ajuda antes de Pix alto, urgente ou para pessoa desconhecida.'
   },
-  golpe_familiar_falso: {
-    respostaSimples: 'Pode ser golpe. Não envie dinheiro e não responda com pressa.',
-    passoAPasso: ['Não faça Pix nem transferência.', 'Não clique em links.', 'Ligue para seu familiar pelo número antigo que você já conhece.', 'Pergunte algo que só ele saberia responder.', 'Se confirmar suspeita, bloqueie e denuncie o contato.', 'Peça ajuda a alguém de confiança.'],
-    atencao: 'Golpistas podem usar foto e nome de familiar para enganar.',
-    alertaHumano: ALERTA_HUMANO,
-    quandoPedirAjuda: 'Peça ajuda antes de enviar qualquer valor, principalmente se for urgente ou alto.'
+  duvida_digital: {
+    respostaSimples: 'Posso ajudar com essa dúvida digital. Diga se você usa Android, iPhone ou computador para eu orientar melhor.',
+    passoAPasso: ['Abra o aplicativo ou configuração relacionada.', 'Procure por Perfil, Conta, Ajustes, Configurações ou Ajuda.', 'Leia a tela com calma antes de tocar em confirmar.', 'Se aparecer senha, código, Pix ou link estranho, pare e peça ajuda.'],
+    atencao: 'Não envie senha, código, CPF, cartão ou documento durante testes.',
+    opcoesFluxo: ['Android', 'iPhone', 'Computador', 'WhatsApp', 'Instagram']
   },
-  dinheiro_familiar_ou_valor_alto: {
-    respostaSimples: 'Não envie o dinheiro agora. Essa situação é arriscada e precisa ser confirmada com calma.',
-    passoAPasso: ['Não faça Pix nem transferência agora.', 'Ligue para seu familiar usando um número que você já conhece.', 'Se possível, confirme pessoalmente ou com outro parente de confiança.', 'Não clique em links e não envie código, senha, CPF ou documento.', 'Se continuar em dúvida, peça ajuda na Obra Social Santa Isabel antes de fazer qualquer pagamento.'],
-    atencao: 'Golpistas podem usar foto, nome ou aparência de familiares para pedir dinheiro.',
-    alertaHumano: '⚠️ Antes de enviar dinheiro, fale pessoalmente com um familiar de confiança ou peça ajuda na Obra Social Santa Isabel.',
-    quandoPedirAjuda: 'Peça ajuda sempre que pedirem dinheiro alto, Pix urgente, senha, código ou documento.'
-  },
-  mensagem_pedindo_dinheiro: {
-    respostaSimples: 'Não envie dinheiro ainda. Mensagem pedindo dinheiro pode ser golpe.',
-    passoAPasso: ['Pare antes de fazer Pix ou transferência.', 'Ligue para a pessoa por um número que você já conhece.', 'Confirme com outro familiar ou pessoa de confiança.', 'Não clique em links e não envie senha, código, CPF ou documento.', 'Se continuar em dúvida, peça ajuda na Obra Social Santa Isabel.'],
-    atencao: 'Golpistas podem se passar por conhecidos em mensagens.',
-    alertaHumano: '⚠️ Antes de enviar dinheiro, fale pessoalmente com um familiar de confiança ou peça ajuda na Obra Social Santa Isabel.',
-    quandoPedirAjuda: 'Peça ajuda se houver urgência, número novo, link, senha, código, banco, CPF ou documento.'
-  },
-  confirmar_identidade_familiar: {
-    respostaSimples: 'Não confie apenas em foto, nome ou mensagem. Confirme por outro caminho antes de enviar dinheiro.',
-    passoAPasso: ['Ligue para o número antigo da pessoa, aquele que você já conhecia.', 'Faça uma pergunta que só seu familiar saberia responder.', 'Se possível, peça uma chamada de vídeo.', 'Confirme com outro familiar de confiança.', 'Não envie dinheiro enquanto estiver em dúvida.', 'Se precisar, peça ajuda na Obra Social Santa Isabel.'],
-    atencao: 'Golpistas podem usar foto, nome e até voz para parecer um familiar.',
-    alertaHumano: '⚠️ Se há pedido de dinheiro, confirme com uma pessoa de confiança antes de qualquer Pix.',
-    quandoPedirAjuda: 'Peça ajuda se houver urgência, valor alto, pedido de código, senha ou documento.'
-  },
-  link_suspeito: {
-    respostaSimples: 'Link estranho pode ser golpe. Não clique e não preencha dados.',
-    passoAPasso: ['Não abra o link se ainda não abriu.', 'Se abriu, não digite senha, CPF, cartão ou código.', 'Feche a página.', 'Abra o aplicativo oficial da empresa para conferir.', 'Apague a mensagem se parecer golpe.'],
-    atencao: 'Promoção, prêmio e urgência costumam ser usados em golpes.',
-    alertaHumano: ALERTA_HUMANO,
-    quandoPedirAjuda: 'Peça ajuda se você clicou, pagou ou informou dados.'
-  },
-  // Futuro módulo web deve ficar restrito a loja/site; o roteamento atual não usa busca web.
-  loja_confiavel: {
-    respostaSimples: 'Posso ajudar a verificar. Qual é o nome ou site da loja?',
-    passoAPasso: ['Confira se o endereço do site está correto.', 'Procure CNPJ, telefone e endereço real.', 'Desconfie de preço muito abaixo do normal.', 'Pesquise reclamações da loja.', 'Evite pagar por Pix para pessoa física desconhecida.'],
-    atencao: 'Loja falsa costuma usar preço muito barato e pressão para pagar rápido.',
-    alertaHumano: ALERTA_HUMANO,
-    quandoPedirAjuda: 'Peça ajuda antes de comprar se tiver dúvida.'
-  },
-  banco_generico: {
-    respostaSimples: 'Entendi. É problema para entrar no app, fazer Pix, ver saldo ou outro assunto?',
-    passoAPasso: ['Escolha uma opção abaixo para eu explicar melhor.'],
-    atencao: 'Nunca compartilhe senha ou código do banco.',
-    alertaHumano: ALERTA_HUMANO,
-    quandoPedirAjuda: 'Peça ajuda antes de confirmar pagamento.',
-    opcoesFluxo: ['Pix', 'Entrar no app', 'Ver saldo', 'Outro assunto']
-  },
-  whatsapp_generico: {
-    respostaSimples: 'Você quer mandar mensagem, colocar foto, recuperar conta ou verificar golpe?',
-    passoAPasso: ['Escolha uma opção abaixo para continuar.'],
-    atencao: 'Não passe código de verificação do WhatsApp.',
-    quandoPedirAjuda: '',
-    opcoesFluxo: ['Mandar mensagem', 'Colocar foto', 'Recuperar conta', 'Verificar golpe']
-  },
-  whatsapp_mensagem: {
-    respostaSimples: 'Mandar mensagem no WhatsApp é simples.',
-    passoAPasso: ['Abra o WhatsApp.', 'Toque na conversa da pessoa.', 'Digite sua mensagem.', 'Toque na seta para enviar.', 'Confira se enviou para a pessoa certa.'],
-    atencao: 'Confira o nome antes de enviar informação importante.',
-    quandoPedirAjuda: ''
-  },
-  whatsapp_foto: {
-    respostaSimples: 'Você pode trocar a foto do WhatsApp em poucos toques.',
-    passoAPasso: ['Abra o WhatsApp.', 'Toque em Configurações.', 'Toque no seu nome ou na sua foto.', 'Toque no ícone de câmera.', 'Escolha uma foto da galeria.', 'Confirme a troca.'],
-    atencao: 'Evite usar foto com documento ou dados pessoais.',
-    quandoPedirAjuda: ''
-  },
-  whatsapp_contato: {
-    respostaSimples: 'Você pode salvar um contato pelo aplicativo Contatos do celular.',
-    passoAPasso: ['Abra Contatos no celular.', 'Toque em adicionar novo contato.', 'Digite nome e telefone.', 'Salve.', 'Abra o WhatsApp e procure o nome da pessoa.'],
-    atencao: 'Confirme o número antes de enviar mensagem.',
-    quandoPedirAjuda: ''
-  },
-  whatsapp_audio: {
-    respostaSimples: 'Para mandar áudio no WhatsApp, use o botão do microfone na conversa.',
-    passoAPasso: ['Abra a conversa no WhatsApp.', 'Segure o botão do microfone.', 'Fale perto do celular.', 'Solte para enviar.', 'Se errar, apague e grave de novo.'],
-    atencao: 'Não envie dados de banco, senha ou código por áudio.',
-    quandoPedirAjuda: ''
-  },
-  celular_volume: {
-    respostaSimples: 'Vamos aumentar o volume com calma.',
-    passoAPasso: ['Pegue o celular na mão.', 'Aperte o botão de cima na lateral.', 'Veja se a barra de volume aparece na tela.', 'Teste o som com um vídeo curto.', 'Se ainda estiver baixo, abra Configurações e toque em Som.'],
-    atencao: 'Não instale aplicativo desconhecido para aumentar som.',
-    quandoPedirAjuda: 'Peça ajuda se o botão não funcionar.'
-  },
-  celular_wifi: {
-    respostaSimples: 'Você pode conectar no Wi-Fi pelas configurações.',
-    passoAPasso: ['Abra Configurações.', 'Toque em Wi-Fi.', 'Escolha a rede da sua casa.', 'Digite a senha e confirme.', 'Espere aparecer Conectado.'],
-    atencao: 'Evite rede aberta desconhecida.',
-    quandoPedirAjuda: ''
-  },
-  celular_print: {
-    respostaSimples: 'Para tirar print, use os botões do celular.',
-    passoAPasso: ['Abra a tela que deseja salvar.', 'Aperte juntos o botão de ligar e volume para baixo.', 'Procure a imagem na galeria.', 'Compartilhe só com pessoa de confiança.'],
-    atencao: '',
-    quandoPedirAjuda: ''
-  },
-  celular_sem_som: {
-    respostaSimples: 'Vamos verificar por que o celular está sem som.',
-    passoAPasso: ['Aumente o volume pelo botão lateral.', 'Veja se o modo silencioso está ligado.', 'Desative o Bluetooth se o som estiver indo para outro aparelho.', 'Teste com uma música ou vídeo.', 'Reinicie o celular se continuar sem som.'],
-    atencao: 'Não instale aplicativo desconhecido prometendo consertar som.',
-    quandoPedirAjuda: 'Peça ajuda se caiu água ou o alto-falante parece quebrado.'
-  },
-  instalar_pwa: {
-    respostaSimples: 'Você pode adicionar o OSSI Ajuda Digital na tela inicial.',
-    passoAPasso: ['Abra o site no navegador do celular.', 'No Android, toque nos três pontos do navegador.', 'Toque em Adicionar à tela inicial.', 'No iPhone, toque em Compartilhar.', 'Toque em Adicionar à Tela de Início.'],
-    atencao: '',
-    quandoPedirAjuda: ''
-  },
-  bob_esponja: {
-    respostaSimples: 'Bob Esponja é um personagem de desenho animado. Ele é uma esponja amarela que vive no fundo do mar, em uma casa de abacaxi, e trabalha no Siri Cascudo. É uma série de humor feita principalmente para crianças, mas muitos adultos também gostam.',
+  geral: {
+    respostaSimples: 'Posso responder de forma simples, mas não devo inventar informações. Se for sobre a Obra Social Santa Isabel, use apenas o que está informado no sistema ou pergunte a alguém da instituição.',
     passoAPasso: [],
-    atencao: '',
-    quandoPedirAjuda: ''
+    atencao: 'Se aparecer pedido de dinheiro, senha, código ou link estranho, trate como risco.'
   },
-  mark_zuckerberg: {
-    respostaSimples: 'Mark Zuckerberg é um empresário conhecido por criar o Facebook. Ele também dirige a Meta, empresa responsável por serviços como Facebook, Instagram e WhatsApp.',
+  institucional: {
+    respostaSimples: 'Este sistema é o OSSI Ajuda Digital, criado para apoiar pessoas idosas com dúvidas digitais na Obra Social Santa Isabel.',
+    passoAPasso: ['Ele reúne uma central de ajuda e o assistente Sérgio.', 'O objetivo é orientar com linguagem simples e cuidado com golpes.', 'Eu não devo inventar nomes de autores, equipes ou dados institucionais que não estejam no sistema.'],
+    atencao: 'Para informações oficiais, confirme diretamente com a Obra Social Santa Isabel.'
+  },
+  mark: {
+    respostaSimples: 'Mark Zuckerberg é um empresário de tecnologia conhecido por cofundar o Facebook e por liderar a Meta, empresa ligada ao Facebook, Instagram e WhatsApp.',
     passoAPasso: [],
-    atencao: '',
-    quandoPedirAjuda: ''
+    atencao: 'Essa é uma explicação geral. Para dados atuais, confirme em uma fonte confiável.'
   },
-  lara_croft: {
-    respostaSimples: 'Lara Croft é uma personagem fictícia dos jogos e filmes Tomb Raider. Ela é conhecida como uma aventureira que explora lugares antigos e resolve mistérios.',
-    passoAPasso: [],
-    atencao: '',
-    quandoPedirAjuda: ''
+  internet: {
+    respostaSimples: 'Internet é uma grande rede que conecta celulares, computadores e serviços no mundo todo para trocar mensagens, ver sites, vídeos e informações.',
+    passoAPasso: ['Você usa a internet quando abre WhatsApp, sites, vídeos ou aplicativos online.', 'Ela pode vir pelo Wi‑Fi da casa ou pelos dados móveis do celular.', 'Use com cuidado: não clique em links estranhos nem envie dados pessoais.']
   },
-  treino_celular: {
-    respostaSimples: 'Claro. Aqui estão exercícios simples para treinar o uso do celular.',
-    passoAPasso: ['Aumente e diminua o volume.', 'Conecte o celular ao Wi-Fi.', 'Abra o WhatsApp e mande uma mensagem.', 'Troque a foto de perfil do WhatsApp.', 'Tire um print da tela.', 'Veja se um link parece estranho antes de clicar.'],
-    atencao: 'Treine com calma e não mexa em banco, senha ou Pix sem ajuda.',
-    quandoPedirAjuda: 'Peça ajuda se aparecer cobrança, senha, código, banco ou link suspeito.'
+  bob: {
+    respostaSimples: 'Bob Esponja é um personagem de desenho animado. Ele é uma esponja amarela que vive no fundo do mar, na cidade fictícia Fenda do Biquíni.',
+    passoAPasso: []
   }
 };
 
+const GUIAS_LOCAIS = {
+  tecnologia: {
+    id: 'tecnologia', categoria: TIPOS_PUBLICOS.duvida_digital, risco: 'baixo',
+    contexto: 'Dúvidas comuns de celular, computador, WhatsApp, Instagram, aplicativos, fotos, configurações, atualização e treino digital. O local só orienta; a IA deve responder a pergunta específica.',
+    passosSugeridos: ['identificar aplicativo ou aparelho', 'dar passos curtos', 'pedir Android, iPhone ou computador quando isso mudar o caminho', 'alertar para não compartilhar dados sensíveis'],
+    regrasSeguranca: ['não pedir senha, código, CPF completo, cartão ou documento', 'não mandar instalar app fora de loja oficial', 'não sugerir clicar em link suspeito'],
+    nuncaFazer: ['transformar toda dúvida digital em golpe', 'responder com bloco pronto que ignore a pergunta específica'],
+    alertaHumanoPadrao: '', fallbackLocal: RESPOSTAS.duvida_digital
+  },
+  pix_seguro: {
+    id: 'pix_seguro', categoria: TIPOS_PUBLICOS.seguranca, risco: 'medio',
+    contexto: 'Orientação preventiva para fazer Pix com segurança quando não há golpe explícito.',
+    passosSugeridos: ['usar aplicativo oficial do banco', 'conferir nome, banco e valor', 'parar em caso de urgência, número novo ou desconhecido', 'guardar comprovante'],
+    regrasSeguranca: ['não recomendar Pix se houver dúvida de identidade', 'senha apenas dentro do aplicativo oficial', 'não pedir chave bancária do usuário'],
+    nuncaFazer: ['pedir senha', 'orientar pagamento com pressa'],
+    alertaHumanoPadrao: '', fallbackLocal: RESPOSTAS.pix_seguro
+  },
+  risco_real: {
+    id: 'risco_real', categoria: TIPOS_PUBLICOS.seguranca, risco: 'alto',
+    contexto: 'Pedido de dinheiro, Pix urgente, link suspeito, banco, número desconhecido, familiar falso, CPF/cartão/documento ou golpe provável.',
+    passosSugeridos: ['não enviar dinheiro', 'não clicar em links', 'confirmar por número antigo ou canal conhecido', 'falar com outro familiar', 'pedir ajuda na Obra Social Santa Isabel'],
+    regrasSeguranca: ['manter alertaHumano', 'bloquear orientação de pagamento', 'não pedir senha/código/CPF/cartão/documento', 'não confiar apenas em foto, voz, nome ou número novo'],
+    nuncaFazer: ['recomendar Pix, transferência ou pagamento', 'remover alerta humano', 'mandar clicar em link suspeito'],
+    alertaHumanoPadrao: ALERTA_HUMANO, fallbackLocal: RESPOSTAS.risco_real
+  },
+  dado_sensivel: {
+    id: 'dado_sensivel', categoria: TIPOS_PUBLICOS.seguranca, risco: 'critico',
+    contexto: 'O usuário compartilhou senha, código, CPF completo, cartão, documento ou dado bancário. A resposta deve ser local imediata.',
+    passosSugeridos: ['interromper', 'orientar apagar dados', 'não repetir dados', 'pedir ajuda se dados foram enviados a terceiros'],
+    regrasSeguranca: ['nunca processar, guardar ou repetir o dado sensível'],
+    nuncaFazer: ['chamar IA com o dado sensível'], alertaHumanoPadrao: ALERTA_HUMANO, fallbackLocal: RESPOSTAS.dados_sensiveis
+  },
+  geral: {
+    id: 'geral', categoria: TIPOS_PUBLICOS.duvida_geral, risco: 'baixo',
+    contexto: 'Perguntas gerais. A IA responde em linguagem simples, sem inventar dados institucionais e sem web.',
+    passosSugeridos: ['responder direto', 'explicar termos difíceis', 'se for sobre instituição, ser honesto sobre limites'],
+    regrasSeguranca: ['não transformar pergunta geral em golpe sem sinal real'],
+    nuncaFazer: ['inventar autoria do sistema', 'fornecer dados atuais não confirmados como definitivos'], alertaHumanoPadrao: '', fallbackLocal: RESPOSTAS.geral
+  }
+};
+
+const PACOTES_ORIENTACAO = GUIAS_LOCAIS;
+
 const INTENCOES = [
-  { id: 'incompreensivel', tipo: TIPOS_PUBLICOS.saudacao_ou_vaga, origem: 'habilidade_local', prioridade: 120, risco: false, limite: 1, termosFortes: ['tastando', 'pesquise me senhora', 'escusei me senhora', 'me senhora'], termosFracos: ['abc', 'oi'], resposta: RESPOSTAS.incompreensivel },
-  { id: 'confirmar_identidade_familiar', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_dinamica', prioridade: 130, risco: true, dinamicaSegura: true, limite: 7, termosFortes: ['como posso confirmar que e meu sobrinho', 'como confirmar se e meu sobrinho', 'como saber se e meu filho', 'como confirmar se e meu parente', 'quero saber se e meu parente ou nao', 'como saber se essa pessoa e real', 'ele mandou foto posso confiar', 'ela tem foto do meu filho posso confiar', 'tem cara do meu sobrinho', 'o que eu pergunto'], termosFracos: ['confirmar', 'confirmo', 'saber', 'pergunto', 'pergunta', 'confiar', 'foto', 'aparencia', 'cara', 'real', 'verdadeiro', 'verdadeira', 'numero', 'sobrinho', 'sobrinha', 'filho', 'filha', 'neto', 'neta', 'mae', 'pai', 'irmao', 'irma', 'familiar', 'parente'], combinacoesCriticas: [['confirmar', 'sobrinho'], ['confirmar', 'parente'], ['confirmar', 'familiar'], ['saber', 'filho'], ['saber', 'parente'], ['saber', 'pessoa', 'real'], ['foto', 'confiar'], ['foto', 'filho'], ['cara', 'sobrinho'], ['numero', 'verdadeiro'], ['o', 'que', 'pergunto']], resposta: RESPOSTAS.confirmar_identidade_familiar, contexto: 'confirmação de identidade em possível golpe familiar', regrasSeguranca: ['Não confiar apenas em foto, nome, mensagem ou voz.', 'Confirmar por número antigo/canal já conhecido.', 'Fazer pergunta que só o familiar saberia.', 'Pedir chamada de vídeo quando possível.', 'Confirmar com outro familiar de confiança.', 'Nunca orientar envio de dinheiro enquanto houver dúvida.', 'Orientar ajuda na Obra Social Santa Isabel.'], sugestoes: ['ligar para número antigo', 'pergunta privada da família', 'chamada de vídeo', 'confirmar com outro parente', 'não enviar dinheiro'], fallbackLocal: RESPOSTAS.confirmar_identidade_familiar },
-  { id: 'dinheiro_familiar_ou_valor_alto', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_dinamica', prioridade: 125, risco: true, dinamicaSegura: true, limite: 7, termosFortes: ['meu tio esta pedindo trinta mil reais', 'tio esta pedindo trinta mil', 'pessoa com cara do meu sobrinho', 'parece meu sobrinho', 'pedindo dinheiro', 'pedindo pix', 'pediu dinheiro', 'pediu pix', 'trinta mil', 'tres mil', '30 mil', '3000', 'valor alto'], termosFracos: ['tio', 'tia', 'sobrinho', 'sobrinha', 'filho', 'filha', 'neto', 'neta', 'mae', 'pai', 'irmao', 'irma', 'familiar', 'parente', 'pessoa', 'cara', 'foto', 'parece', 'pedindo', 'pediu', 'dinheiro', 'pix', 'trinta', 'tres', 'mil', '3000', '30', 'valor', 'alto'], combinacoesCriticas: [['tio', 'pedindo'], ['tia', 'pedindo'], ['sobrinho', 'pedindo'], ['sobrinha', 'pedindo'], ['filho', 'pedindo'], ['filha', 'pedindo'], ['neto', 'pedindo'], ['neta', 'pedindo'], ['mae', 'pedindo'], ['pai', 'pedindo'], ['irmao', 'pedindo'], ['irma', 'pedindo'], ['familiar', 'dinheiro'], ['parente', 'dinheiro'], ['pessoa', 'cara', 'sobrinho'], ['parece', 'meu'], ['foto', 'dinheiro'], ['pedindo', 'trinta'], ['pedindo', 'tres'], ['valor', 'alto']], resposta: RESPOSTAS.dinheiro_familiar_ou_valor_alto, contexto: 'pedido de dinheiro em possível golpe familiar ou valor alto', regrasSeguranca: ['Bloquear envio de dinheiro enquanto houver dúvida.', 'Confirmar identidade por outro caminho.', 'Não clicar em links nem enviar senha, código, CPF ou documento.', 'Manter alerta humano em destaque.'], sugestoes: ['parar antes do Pix', 'ligar para número conhecido', 'confirmar com familiar', 'Obra Social Santa Isabel'], fallbackLocal: RESPOSTAS.dinheiro_familiar_ou_valor_alto },
-  { id: 'mensagem_pedindo_dinheiro', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', prioridade: 122, risco: true, limite: 6, termosFortes: ['me mandaram mensagem pedindo dinheiro', 'recebi mensagem pedindo dinheiro', 'alguem pediu dinheiro por mensagem', 'pessoa pediu dinheiro no whatsapp', 'pediram dinheiro no whatsapp', 'mensagem pedindo dinheiro'], termosFracos: ['mensagem', 'pedindo', 'pediu', 'pediram', 'dinheiro', 'whatsapp', 'pessoa'], combinacoesCriticas: [['mensagem', 'dinheiro'], ['pedindo', 'dinheiro'], ['pediu', 'dinheiro'], ['pediram', 'dinheiro'], ['dinheiro', 'whatsapp']], resposta: RESPOSTAS.mensagem_pedindo_dinheiro },
-  { id: 'pix_valor_alto', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', prioridade: 118, risco: true, limite: 7, termosFortes: ['vou mandar 3000 no pix', 'vou fazer pix de 3000', 'vou mandar tres mil no pix', 'mandar dinheiro para desconhecido', 'pessoa desconhecida pediu dinheiro', 'pix para pessoa que nao conheco', 'pediram dinheiro urgente'], termosFracos: ['pix', 'dinheiro', 'desconhecido', 'desconhecida', 'urgente', 'valor', 'alto', '3000', 'tres', 'mil', 'mandar', 'enviar', 'pessoa', 'conheco', 'conheço'], combinacoesCriticas: [['pix', '3000'], ['pix', 'tres', 'mil'], ['dinheiro', 'desconhecido'], ['pessoa', 'desconhecida'], ['pix', 'desconhecido'], ['dinheiro', 'urgente'], ['valor', 'alto']], resposta: RESPOSTAS.pix_valor_alto },
-  { id: 'golpe_familiar_falso', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', prioridade: 115, risco: true, limite: 9, termosFortes: ['foto do meu filho', 'foto do meu irmao', 'foto de familiar', 'numero novo dizendo que e minha mae', 'numero novo dizendo que e meu filho', 'outro numero', 'numero novo'], termosFracos: ['filho', 'filha', 'irmao', 'irma', 'mae', 'pai', 'familiar', 'parente', 'foto', 'pediu pix', 'pediu dinheiro', 'pedindo dinheiro', 'pedindo pix'], combinacoesCriticas: [['foto', 'familiar'], ['foto', 'dinheiro'], ['foto', 'pix'], ['numero novo', 'mae'], ['numero novo', 'filho'], ['outro numero', 'dinheiro'], ['familiar', 'dinheiro']], resposta: RESPOSTAS.golpe_familiar_falso },
-  { id: 'pix_urgente_golpe', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', prioridade: 110, risco: true, limite: 7, termosFortes: ['me pediram pix urgente', 'pediram dinheiro pelo whatsapp', 'numero pediu pix', 'pessoa pediu dinheiro', 'pediu pix urgente'], termosFracos: ['pix', 'dinheiro', 'urgente', 'whatsapp', 'pediram', 'pediu', 'pessoa'], combinacoesCriticas: [['pix', 'urgente'], ['dinheiro', 'whatsapp'], ['pediu', 'pix'], ['pediram', 'dinheiro']], resposta: RESPOSTAS.pix_urgente_golpe },
-  { id: 'senha_whatsapp', tipo: TIPOS_PUBLICOS.seguranca, origem: 'habilidade_local', prioridade: 100, risco: true, limite: 7, termosFortes: ['senha no whatsapp', 'recuperar minha senha no whatsapp', 'esqueci minha senha no whatsapp', 'nao consigo entrar no whatsapp', 'perdi acesso ao whatsapp', 'codigo do whatsapp', 'recuperar conta do whatsapp'], termosFracos: ['senha', 'whatsapp', 'recuperar', 'entrar', 'perdi acesso', 'codigo', 'conta'], combinacoesCriticas: [['senha', 'whatsapp'], ['codigo', 'whatsapp'], ['recuperar', 'whatsapp'], ['entrar', 'whatsapp'], ['acesso', 'whatsapp']], resposta: RESPOSTAS.senha_whatsapp },
-  { id: 'senha_banco', tipo: TIPOS_PUBLICOS.seguranca, origem: 'habilidade_local', prioridade: 98, risco: true, limite: 7, termosFortes: ['senha do banco', 'esqueci senha do banco', 'nao consigo entrar no app do banco', 'entrar no banco'], termosFracos: ['senha', 'banco', 'app do banco', 'entrar', 'bloqueou'], combinacoesCriticas: [['senha', 'banco'], ['entrar', 'banco']], resposta: RESPOSTAS.senha_banco },
-  { id: 'senha_gov', tipo: TIPOS_PUBLICOS.seguranca, origem: 'habilidade_local', prioridade: 96, risco: true, limite: 7, termosFortes: ['senha do gov.br', 'esqueci senha do gov.br', 'recuperar gov.br', 'entrar no gov.br'], termosFracos: ['senha', 'gov.br', 'recuperar', 'entrar'], combinacoesCriticas: [['senha', 'gov.br'], ['recuperar', 'gov.br']], resposta: RESPOSTAS.senha_gov },
-  { id: 'senha_facebook', tipo: TIPOS_PUBLICOS.seguranca, origem: 'habilidade_local', prioridade: 94, risco: true, limite: 7, termosFortes: ['senha do facebook', 'esqueci senha do facebook', 'nao consigo entrar no facebook', 'recuperar facebook'], termosFracos: ['senha', 'facebook', 'entrar', 'recuperar'], combinacoesCriticas: [['senha', 'facebook'], ['entrar', 'facebook']], resposta: RESPOSTAS.senha_facebook },
-  { id: 'senha_instagram', tipo: TIPOS_PUBLICOS.seguranca, origem: 'habilidade_local', prioridade: 92, risco: true, limite: 7, termosFortes: ['senha do instagram', 'esqueci senha do instagram', 'nao consigo entrar no instagram', 'recuperar instagram'], termosFracos: ['senha', 'instagram', 'entrar', 'recuperar'], combinacoesCriticas: [['senha', 'instagram'], ['entrar', 'instagram']], resposta: RESPOSTAS.senha_instagram },
-  { id: 'senha_email', tipo: TIPOS_PUBLICOS.seguranca, origem: 'habilidade_local', prioridade: 90, risco: true, limite: 7, termosFortes: ['senha do email', 'senha do e-mail', 'esqueci senha do email', 'recuperar email'], termosFracos: ['senha', 'email', 'e-mail', 'entrar', 'recuperar'], combinacoesCriticas: [['senha', 'email'], ['senha', 'e-mail']], resposta: RESPOSTAS.senha_email },
-  { id: 'link_suspeito', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', prioridade: 88, risco: true, limite: 5, termosFortes: ['recebi link estranho', 'cliquei em link', 'cliquei em um link', 'link no whatsapp', 'link de promocao', 'link suspeito'], termosFracos: ['link', 'estranho', 'suspeito', 'cliquei', 'promocao', 'whatsapp'], combinacoesCriticas: [['link', 'estranho'], ['link', 'whatsapp'], ['link', 'promocao'], ['cliquei', 'link']], resposta: RESPOSTAS.link_suspeito },
-  { id: 'pix_como_fazer', tipo: TIPOS_PUBLICOS.seguranca, origem: 'habilidade_local', prioridade: 82, risco: true, limite: 5, termosFortes: ['como fazer pix', 'fazer um pix', 'enviar pix', 'pagar com pix', 'pix com seguranca'], termosFracos: ['pix', 'fazer', 'enviar', 'pagar', 'seguranca'], combinacoesCriticas: [['fazer', 'pix'], ['enviar', 'pix'], ['pagar', 'pix']], resposta: RESPOSTAS.pix_como_fazer },
-  { id: 'loja_confiavel', tipo: TIPOS_PUBLICOS.consulta_loja_site, origem: 'seguranca_local', prioridade: 80, risco: true, limite: 5, termosFortes: ['loja e confiavel', 'site e confiavel', 'posso comprar nessa loja', 'preco muito barato'], termosFracos: ['loja', 'site', 'confiavel', 'comprar', 'preco', 'barato'], combinacoesCriticas: [['loja', 'confiavel'], ['site', 'confiavel'], ['preco', 'barato']], resposta: RESPOSTAS.loja_confiavel },
-  { id: 'senha_generica', tipo: TIPOS_PUBLICOS.seguranca, origem: 'esclarecimento_local', prioridade: 70, risco: true, limite: 5, termosFortes: ['esqueci minha senha', 'nao consigo entrar', 'recuperar conta', 'minha conta bloqueou'], termosFracos: ['senha', 'entrar', 'recuperar', 'conta', 'bloqueou', 'acesso'], resposta: RESPOSTAS.senha_generica, naoCombinarCom: APLICATIVOS },
-  { id: 'banco_generico', tipo: TIPOS_PUBLICOS.seguranca, origem: 'esclarecimento_local', prioridade: 66, risco: true, limite: 4, termosFortes: ['problema no banco', 'app do banco', 'como ver saldo', 'ver saldo'], termosFracos: ['banco', 'saldo', 'app', 'problema'], combinacoesCriticas: [['ver', 'saldo'], ['problema', 'banco']], resposta: RESPOSTAS.banco_generico },
-  { id: 'whatsapp_mensagem', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', prioridade: 60, risco: false, limite: 5, termosFortes: ['mandar mensagem no whatsapp', 'enviar mensagem no whatsapp'], termosFracos: ['mandar', 'enviar', 'mensagem', 'whatsapp'], combinacoesCriticas: [['mensagem', 'whatsapp']], resposta: RESPOSTAS.whatsapp_mensagem },
-  { id: 'whatsapp_foto', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', prioridade: 58, risco: false, limite: 5, termosFortes: ['mudar a foto de perfil no whatsapp', 'mudar foto de perfil no whatsapp', 'colocar foto no whatsapp', 'foto no whatsapp', 'trocar foto do perfil', 'trocar foto do whatsapp', 'trocar foto no whatsapp'], termosFracos: ['foto', 'perfil', 'whatsapp', 'colocar', 'trocar'], combinacoesCriticas: [['foto', 'whatsapp']], resposta: RESPOSTAS.whatsapp_foto },
-  { id: 'whatsapp_contato', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', prioridade: 56, risco: false, limite: 5, termosFortes: ['salvar contato', 'adicionar contato', 'contato no whatsapp'], termosFracos: ['contato', 'whatsapp', 'salvar', 'adicionar'], combinacoesCriticas: [['contato', 'whatsapp']], resposta: RESPOSTAS.whatsapp_contato },
-  { id: 'whatsapp_audio', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', prioridade: 54, risco: false, limite: 5, termosFortes: ['mandar audio no whatsapp', 'enviar audio no whatsapp', 'gravar audio'], termosFracos: ['audio', 'whatsapp', 'mandar', 'enviar', 'gravar'], combinacoesCriticas: [['audio', 'whatsapp']], resposta: RESPOSTAS.whatsapp_audio },
-  { id: 'whatsapp_generico', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'esclarecimento_local', prioridade: 45, risco: false, limite: 4, termosFortes: ['whatsapp nao abre', 'duvida no whatsapp'], termosFracos: ['whatsapp', 'abre', 'duvida'], resposta: RESPOSTAS.whatsapp_generico },
-  { id: 'celular_sem_som', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', prioridade: 44, risco: false, limite: 5, termosFortes: ['celular esta sem som', 'sem som', 'nao sai som'], termosFracos: ['celular', 'som', 'silencioso'], combinacoesCriticas: [['sem', 'som'], ['celular', 'som']], resposta: RESPOSTAS.celular_sem_som },
-  { id: 'celular_volume', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', prioridade: 42, risco: false, limite: 4, termosFortes: ['aumentar o volume', 'volume do celular', 'aumentar o som'], termosFracos: ['volume', 'som', 'aumentar', 'baixo'], resposta: RESPOSTAS.celular_volume },
-  { id: 'celular_wifi', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', prioridade: 40, risco: false, limite: 4, termosFortes: ['conectar no wifi', 'conectar no wi-fi', 'entrar no wifi'], termosFracos: ['wifi', 'wi-fi', 'internet', 'conectar'], resposta: RESPOSTAS.celular_wifi },
-  { id: 'celular_print', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', prioridade: 38, risco: false, limite: 4, termosFortes: ['tirar print', 'captura de tela'], termosFracos: ['print', 'captura', 'tela'], resposta: RESPOSTAS.celular_print },
-  { id: 'instalar_pwa', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', prioridade: 36, risco: false, limite: 4, termosFortes: ['instalar na tela inicial', 'adicionar na tela inicial', 'instalar o sistema'], termosFracos: ['instalar', 'tela inicial', 'adicionar'], resposta: RESPOSTAS.instalar_pwa },
-  { id: 'treino_celular', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'resposta_local', prioridade: 50, risco: false, limite: 6, termosFortes: ['lista de exercicios para treinar celular', 'exercicios para treinar uso de celular', 'lista de exercicios para treinar o uso de celular', 'perguntas para treinar celular', 'treinar o uso de celular', 'praticar celular', 'me faca uma lista de exercicios', 'lista de perguntas para treinar o uso de celular', 'perguntas para treinar o uso de celular'], termosFracos: ['lista', 'exercicios', 'perguntas', 'treinar', 'praticar', 'celular'], combinacoesCriticas: [['exercicios', 'treinar'], ['treinar', 'celular'], ['praticar', 'celular'], ['lista', 'exercicios']], resposta: RESPOSTAS.treino_celular },
-  { id: 'bob_esponja', tipo: TIPOS_PUBLICOS.duvida_geral, origem: 'resposta_local', prioridade: 34, risco: false, limite: 7, termosFortes: ['bob esponja', 'quem e o bob esponja'], termosFracos: ['bob', 'esponja', 'desenho'], combinacoesCriticas: [['bob', 'esponja']], resposta: RESPOSTAS.bob_esponja },
-  { id: 'mark_zuckerberg', tipo: TIPOS_PUBLICOS.duvida_geral, origem: 'resposta_local', prioridade: 33, risco: false, limite: 7, termosFortes: ['mark zuckerberg', 'quem e mark zuckerberg'], termosFracos: ['mark', 'zuckerberg'], combinacoesCriticas: [['mark', 'zuckerberg']], resposta: RESPOSTAS.mark_zuckerberg },
-  { id: 'lara_croft', tipo: TIPOS_PUBLICOS.duvida_geral, origem: 'resposta_local', prioridade: 32, risco: false, limite: 7, termosFortes: ['lara croft', 'quem e lara croft'], termosFracos: ['lara', 'croft'], combinacoesCriticas: [['lara', 'croft']], resposta: RESPOSTAS.lara_croft }
-].sort((a, b) => b.prioridade - a.prioridade);
+  { id: 'guia_tecnologia', tipo: TIPOS_PUBLICOS.duvida_digital, guia: 'tecnologia' },
+  { id: 'pix_seguro', tipo: TIPOS_PUBLICOS.seguranca, guia: 'pix_seguro' },
+  { id: 'risco_real', tipo: TIPOS_PUBLICOS.seguranca, guia: 'risco_real' },
+  { id: 'dado_sensivel', tipo: TIPOS_PUBLICOS.seguranca, guia: 'dado_sensivel' },
+  { id: 'duvida_geral', tipo: TIPOS_PUBLICOS.duvida_geral, guia: 'geral' }
+];
 
-function termoPresente(t, termo = '') {
-  const normalizado = normalizarTexto(termo);
-  if (!normalizado) return false;
-  if (!normalizado.includes(' ')) {
-    const escapado = normalizado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`(^|\\s)${escapado}(?=\\s|$)`, 'u').test(t);
-  }
-  return t.includes(normalizado);
-}
-
-function temAlgum(t, termos = []) {
-  return termos.some((termo) => termoPresente(t, termo));
-}
-
-function contarCorrespondencias(t, termos = []) {
-  return termos.filter((termo) => termoPresente(t, termo)).length;
-}
-
-function temTodos(t, termos = []) {
-  return termos.every((termo) => termoPresente(t, termo));
-}
-
-function ehTextoCurtoSemIntencao(t = '') {
-  const palavras = t.split(' ').filter(Boolean);
-  if (['oi', 'ola', 'abc', 'teste', 'testando', 'tastando'].includes(t)) return true;
-  if (palavras.length > 4) return false;
-
-  const intencoesClaras = [
-    'ajuda', 'aplicativo', 'app', 'banco', 'celular', 'codigo', 'conta', 'entrar', 'esqueci',
-    'facebook', 'fazer', 'foto', 'golpe', 'instagram', 'link', 'pix', 'recuperar', 'senha',
-    'whatsapp', 'quem', 'como', 'qual', 'porque', 'onde', 'volume', 'wifi', 'print', 'anime', 'manga'
-  ];
-  if (temAlgum(t, intencoesClaras)) return false;
-
-  const conectivosSemPedido = new Set(['de', 'do', 'da', 'o', 'a', 'e', 'me', 'minha', 'minhas', 'senhora', 'por', 'favor']);
-  const palavrasUteis = palavras.filter((palavra) => !conectivosSemPedido.has(palavra));
-  return palavras.length <= 2 || palavrasUteis.length <= 1;
-}
-
-function ehPerguntaIncompreensivel(texto = '') {
+function temDadoPessoal(texto = '') {
   const t = normalizarTexto(texto);
-  if (!t) return true;
-  if (['pesquise me senhora', 'escusei me senhora', 'me senhora'].some((erro) => t === erro || t.includes(erro))) return true;
-  return ehTextoCurtoSemIntencao(t);
+  return /(\b\d{11}\b|\b\d{16}\b|\b\d{3}[.-]?\d{3}[.-]?\d{3}-?\d{2}\b|\b(?:senha|codigo|token|cartao|cpf|rg|documento|chave pix|agencia|conta)\b)/i.test(t);
 }
 
-function ehContinuidadeCurta(perguntaAtual = '') {
-  const t = normalizarTexto(perguntaAtual);
-  const palavras = t.split(' ').filter(Boolean);
-  if (palavras.length > 5) return false;
-  return [
-    'sim', 'nao', 'nao entendi', 'repita', 'explique melhor', 'pode repetir',
-    'como assim', 'e depois', 'continue', 'continuar', 'isso', 'esse', 'essa',
-    'pode explicar', 'repete'
-  ].includes(t);
-}
-
-function ehPedidoRepeticao(perguntaAtual = '') {
-  const t = normalizarTexto(perguntaAtual);
-  return ehContinuidadeCurta(t) && /(repita|repete|nao entendi|explique melhor|pode repetir|como assim)/.test(t)
-    || /(resposta).{0,30}(quebrada|incompleta).{0,30}(repita|repete|refaca|faca de novo)/.test(t)
-    || /(repita|repete|refaca|faca de novo).{0,30}(resposta|quebrada|incompleta)/.test(t);
-}
-
-function respostaRepeticao(historico = []) {
-  const ultimaPergunta = [...historico]
-    .reverse()
-    .find((m) => m && m.role === 'user' && typeof m.content === 'string' && m.content.trim() && !temDadoPessoal(m.content));
-  const intencaoAnterior = ultimaPergunta ? detectarIntencao(ultimaPergunta.content) : null;
-
-  if (intencaoAnterior) {
-    const pacoteAnterior = respostaIntencaoLocal(intencaoAnterior);
-    pacoteAnterior.resposta.respostaSimples = garantirRespostaCompleta(`Desculpe, vou refazer com calma. ${pacoteAnterior.resposta.respostaSimples}`);
-    pacoteAnterior.origem = 'continuidade_local';
-    return pacoteAnterior;
-  }
-
-  const ultimaResposta = [...historico]
-    .reverse()
-    .find((m) => m && m.role === 'assistant' && typeof m.content === 'string' && m.content.trim() && !temDadoPessoal(m.content));
-
-  if (!ultimaResposta) {
-    return pacote(TIPOS_PUBLICOS.duvida_geral, respostaPadrao({
-      respostaSimples: 'Posso repetir, mas preciso que você me diga qual era a dúvida.',
-      passoAPasso: [],
-      atencao: '',
-      quandoPedirAjuda: ''
-    }), 'continuidade_local');
-  }
-
-  return pacote(TIPOS_PUBLICOS.duvida_geral, respostaPadrao({
-    respostaSimples: `Desculpe, vou repetir com calma. ${ultimaResposta.content}`,
-    passoAPasso: [],
-    atencao: '',
-    quandoPedirAjuda: ''
-  }), 'continuidade_local');
-}
-
-function ehAcaoDigitalComum(texto = '') {
-  const t = normalizarTexto(texto);
-  const pedidoTutorial = /\b(como|quero|preciso|me ensine|ensine|me ajuda|ajuda|tutorial|passo a passo|faca|faça)\b/.test(t);
-  const termosDigitais = /(whatsapp|celular|telefone|app|aplicativo|computador|internet|wifi|wi-fi|volume|som|print|captura de tela|contato|mensagem|foto|perfil|atualizar|treinar|praticar|exercicios|exercícios)/.test(t);
-  const acoesComuns = /(mudar|trocar|colocar).{0,30}(foto|perfil).{0,30}whatsapp|whatsapp.{0,30}(foto|perfil)|mandar mensagem no whatsapp|enviar mensagem no whatsapp|aumentar.{0,20}volume|conectar.{0,20}wi-?fi|atualizar.{0,20}computador|tirar print|captura de tela|salvar contato|treinar.{0,30}celular|praticar.{0,30}celular|lista de exercicios|lista de perguntas/.test(t);
-  return (pedidoTutorial && termosDigitais) || acoesComuns;
+function contemDadoSensivelCompartilhado(texto = '') {
+  const original = String(texto);
+  const t = normalizarTexto(original);
+  return /\b(minha|meu|o meu|a minha)\s+(senha|codigo|token|cpf|cartao|documento|rg|chave pix|conta|agencia)\s+(?:e|é|eh|:)/i.test(original)
+    || /\b(cpf|cartao|cartão|senha|codigo|código|token)\b\D{0,20}\d{4,}/i.test(original)
+    || /\b\d{3}[.-]?\d{3}[.-]?\d{3}-?\d{2}\b/.test(t)
+    || /\b\d{13,16}\b/.test(t);
 }
 
 function contemRiscoReal(texto = '') {
   const t = normalizarTexto(texto);
-  const dinheiro = /(dinheiro|pix|transferencia|deposito|pagamento|pagar|valor alto|trinta mil|tres mil|30 mil|3000|\b\d{4,}\b)/.test(t);
-  const pessoa = /(pessoa|familiar|parente|desconhecido|desconhecida|numero novo|outro numero|tio|tia|sobrinho|sobrinha|filho|filha|neto|neta|mae|pai|irmao|irma|alguem|mensagem|whatsapp)/.test(t);
-  const urgencia = /(urgente|agora|rapido|pressa|valor alto)/.test(t);
-  const pedido = /(pedindo|pediu|pediram|mandaram|recebi|me pediu|me pediram|vou mandar|vou enviar|enviar|mandar|fazer|pagar)/.test(t);
-  const senhaCodigo = /(senha|codigo|token).{0,45}(pediram|pediu|pedindo|enviar|passar|informar|whatsapp|sms)|(?:pediram|pediu|pedindo|enviar|passar|informar).{0,45}(senha|codigo|token)|(?:esqueci|recuperar|entrar|acesso|bloqueou).{0,35}(senha|conta)|nao consigo entrar|conta bloqueou|recuperar email|perdi acesso|ver saldo|saldo|senha/.test(t);
-  const linkSuspeito = /link (estranho|suspeito|no whatsapp)|link.{0,35}(senha|codigo|cpf|cartao|documento|pix|pagamento|banco)|cliquei em (um )?link/.test(t);
-  const bancoRisco = /(banco|cartao|cpf|documento).{0,45}(problema|senha|pagamento|pix|codigo|token|pediram|pediu|link|desconhecido)|(?:problema|senha|pagamento|pix|codigo|token|pediram|pediu|link).{0,45}(banco|cartao|cpf|documento)/.test(t);
-  const documento = /\b(cpf|cartao|documento|rg|dados bancarios)\b|foto do documento/.test(t);
-  const numeroNovoFamiliar = /(numero novo|outro numero).{0,60}(familiar|parente|filho|filha|mae|pai|tio|tia|sobrinho|sobrinha|dinheiro|pix)|(?:familiar|parente|filho|filha|mae|pai|tio|tia|sobrinho|sobrinha).{0,60}(numero novo|outro numero)/.test(t);
-  const golpeDeclarado = /golpe|suspeito|suspeita|desconfiado|desconfiada/.test(t) && /(dinheiro|pix|link|banco|senha|codigo|cpf|cartao|documento|mensagem|whatsapp)/.test(t);
-  return (dinheiro && (pessoa || urgencia || pedido)) || senhaCodigo || linkSuspeito || bancoRisco || documento || numeroNovoFamiliar || golpeDeclarado;
+  const dinheiro = /\b(dinheiro|pix|pagamento|pagar|transferencia|boleto|deposito|reais?)\b/.test(t);
+  const pedido = /\b(pediram|pediu|pedindo|mandaram|mensagem|ligando|ligaram|numero novo|numero desconhecido|desconhecido|urgente|valor alto|trinta mil|tres mil|3000|30 mil)\b/.test(t);
+  const familiar = /\b(filho|filha|sobrinho|sobrinha|neto|neta|mae|pai|irmao|irma|tio|tia|familiar|parente|foto|parece|cara)\b/.test(t);
+  const golpe = /\b(golpe|link estranho|link suspeito|cliquei em um link|loja confiavel|site confiavel|preco muito barato|número desconhecido|numero desconhecido)\b/.test(t);
+  const bancoSensivel = /\b(banco|cartao|cpf|documento|senha|codigo|token)\b/.test(t) && /\b(pediram|pediu|mandaram|ligando|desconhecido|link|mensagem)\b/.test(t);
+  return (dinheiro && (pedido || familiar)) || golpe || bancoSensivel;
 }
 
 function contemTermoRisco(texto = '') {
-  return contemRiscoReal(texto);
+  return contemRiscoReal(texto) || /\b(senha|codigo|token|cpf|cartao|documento|banco|pix|dinheiro|golpe|link estranho|link suspeito)\b/.test(normalizarTexto(texto));
+}
+
+function ehPerguntaPixSeguro(t = '') {
+  return /\bpix\b/.test(t) && /\b(como|fazer|seguranca|seguro|enviar|transferir|pagar)\b/.test(t) && !contemRiscoReal(t);
+}
+
+function ehDuvidaDigital(t = '') {
+  return /\b(whatsapp|instagram|facebook|celular|telefone|android|iphone|computador|notebook|app|aplicativo|foto|perfil|volume|som|wi-fi|wifi|print|tela|atualizar|apagar|instalar|desinstalar|mensagem|audio|video|exercicios|treinar)\b/.test(t);
+}
+
+function ehContinuidadeCurta(pergunta = '') {
+  const t = normalizarTexto(pergunta);
+  if (!t) return false;
+  if (t.split(' ').length > 8) return false;
+  return /\b(como|confirmo|confirmar|posso|faço|faco|agora|isso|ele|ela|e ai|o que|qual|sim|nao|não)\b/.test(t);
+}
+
+function historicoTemRisco(historico = []) {
+  return historico.slice(-4).some((m) => m && typeof m.content === 'string' && contemRiscoReal(m.content));
 }
 
 function classificarRotaPrincipal(perguntaAtual = '', historico = []) {
   const t = normalizarTexto(perguntaAtual);
-  if (!t || ehPerguntaIncompreensivel(t)) return 'incompreensivel';
-
-  const acaoDigital = ehAcaoDigitalComum(t);
-  const riscoReal = contemRiscoReal(t);
-  if (acaoDigital && !riscoReal) return 'acao_digital_comum';
-  if (riscoReal) return 'risco_real';
-
-  if ((ehContinuidadeCurta(t) || ehPerguntaConfirmacaoFamiliar(t)) && historicoIndicaGolpeFamiliar(historico)) {
-    return 'continuidade_risco';
-  }
-
-  return 'pergunta_geral';
-}
-
-function temDadoPessoal(texto = '') {
-  return /(senha|cpf|cartao|documento|rg|codigo|token|pix|dados bancarios|banco)/i.test(normalizarTexto(texto));
-}
-
-function pontuarIntencao(t, intencao) {
-  if (intencao.naoCombinarCom?.some((termo) => t.includes(termo))) return 0;
-
-  let score = 0;
-  score += contarCorrespondencias(t, intencao.termosFortes || []) * 5;
-  score += contarCorrespondencias(t, intencao.termosFracos || []) * 2;
-  score += (intencao.combinacoesCriticas || []).filter((grupo) => temTodos(t, grupo)).length * 8;
-
-  if (intencao.risco && contemTermoRisco(t)) score += 3;
-  if (intencao.tipo === TIPOS_PUBLICOS.seguranca) score += 2;
-
-  return score;
+  if (!t || t.length < 2 || /^[?.!\s]+$/.test(perguntaAtual)) return 'incompreensivel';
+  if (contemDadoSensivelCompartilhado(perguntaAtual)) return 'dado_sensivel';
+  if (ehContinuidadeCurta(perguntaAtual) && historicoTemRisco(historico)) return 'continuidade';
+  if (contemRiscoReal(perguntaAtual)) return 'risco_real';
+  if (ehPerguntaPixSeguro(t)) return 'duvida_digital';
+  if (ehDuvidaDigital(t)) return 'duvida_digital';
+  return 'duvida_geral';
 }
 
 function detectarIntencao(pergunta = '') {
-  const textoNormalizado = normalizarTexto(pergunta);
-  const rota = classificarRotaPrincipal(textoNormalizado, []);
-  if (!textoNormalizado) return { ...INTENCOES.find((i) => i.id === 'incompreensivel'), score: 999, textoNormalizado, rotaPrincipal: rota };
-  if (rota === 'incompreensivel') return { ...INTENCOES.find((i) => i.id === 'incompreensivel'), score: 999, textoNormalizado, rotaPrincipal: rota };
-
-  const candidatas = INTENCOES.filter((i) => {
-    if (i.id === 'incompreensivel') return false;
-    if (rota === 'acao_digital_comum') return i.tipo !== TIPOS_PUBLICOS.seguranca && !i.risco;
-    if (rota === 'risco_real') return true;
-    return i.tipo !== TIPOS_PUBLICOS.seguranca || contemRiscoReal(textoNormalizado);
-  });
-
-  let melhor = null;
-  for (const intencao of candidatas) {
-    const score = pontuarIntencao(textoNormalizado, intencao);
-    const limite = intencao.limite ?? 6;
-    if (score < limite) continue;
-    if (!melhor || score > melhor.score || (score === melhor.score && intencao.prioridade > melhor.prioridade)) {
-      melhor = { ...intencao, score, textoNormalizado, rotaPrincipal: rota };
-    }
-  }
-
-  if (!melhor) return null;
-
-  if (rota === 'risco_real') {
-    const melhorSeguranca = INTENCOES
-      .filter((i) => i.tipo === TIPOS_PUBLICOS.seguranca || i.risco)
-      .map((i) => ({ ...i, score: pontuarIntencao(textoNormalizado, i), textoNormalizado, rotaPrincipal: rota }))
-      .filter((i) => i.score >= (i.limite ?? 6))
-      .sort((a, b) => b.score - a.score || b.prioridade - a.prioridade)[0];
-    return melhorSeguranca || melhor;
-  }
-
-  return melhor;
-}
-
-function extrairMaiorValor(texto = '') {
-  const valores = normalizarTexto(texto).match(/\b\d{3,}(?:[.,]\d{2})?\b/g) || [];
-  return valores.reduce((maior, valor) => {
-    const numero = Number(valor.replace(/\./g, '').replace(',', '.'));
-    return Number.isFinite(numero) ? Math.max(maior, numero) : maior;
-  }, 0);
-}
-
-function deveMostrarAlertaHumano(texto = '') {
-  const t = normalizarTexto(texto);
-  const valorAlto = extrairMaiorValor(t) >= 1000 || /valor alto|muito dinheiro/.test(t);
-  const pixUrgente = /pix/.test(t) && /(urgente|agora|rapido|pressa|mandar|enviar|fazer)/.test(t);
-  const desconhecido = /(desconhecido|desconhecida|nao conheco|nao conheço|numero novo|outro numero)/.test(t);
-  const familiarDinheiro = /(filho|filha|irmao|irma|mae|pai|familiar|parente|foto).{0,50}(dinheiro|pix|valor|deposito|transferencia)|(?:dinheiro|pix|valor|deposito|transferencia).{0,50}(filho|filha|irmao|irma|mae|pai|familiar|parente|foto)/.test(t);
-  const senhaCodigo = /(pediram|pediu|pedindo|pedido|passar|enviar|informar).{0,35}(senha|codigo|token)|(?:senha|codigo|token).{0,35}(pediram|pediu|pedindo|pedido|passar|enviar|informar)/.test(t);
-  const bancoRisco = /banco|app do banco|cartao|cartão/.test(t);
-  const golpeLink = /golpe|link suspeito|link estranho|link.{0,30}(dados|pagamento|pagar|pix|cpf|senha|codigo)/.test(t);
-  const medo = /medo|confuso|confusa|inseguro|insegura|nervoso|nervosa|nao sei o que fazer/.test(t);
-  return valorAlto || pixUrgente || desconhecido || familiarDinheiro || senhaCodigo || bancoRisco || golpeLink || medo;
-}
-
-function respostaSegurancaGenerica() {
-  return pacote(TIPOS_PUBLICOS.seguranca, respostaPadrao({
-    respostaSimples: 'Esse assunto pode envolver golpe. Não envie dinheiro, senha ou código antes de confirmar.',
-    passoAPasso: ['Pare e não faça pagamento agora.', 'Não clique em links.', 'Não envie senha, código, CPF, cartão ou documento.', 'Confirme por outro caminho, como ligação para número conhecido.', 'Peça ajuda a alguém de confiança.'],
-    atencao: 'Com pressa é mais fácil cair em golpe.',
-    alertaHumano: ALERTA_HUMANO,
-    quandoPedirAjuda: 'Peça ajuda antes de confirmar qualquer pagamento.'
-  }), 'seguranca_local');
-}
-
-function respostaIntencaoLocal(intencao) {
-  if (!intencao?.resposta) return null;
-  const resposta = { ...intencao.resposta };
-  if ((intencao.tipo === TIPOS_PUBLICOS.seguranca || intencao.risco) && deveMostrarAlertaHumano(intencao.textoNormalizado || '')) {
-    resposta.alertaHumano = resposta.alertaHumano || ALERTA_HUMANO;
-  }
-  return pacote(intencao.tipo, respostaPadrao(resposta), intencao.origem || 'habilidade_local');
-}
-
-function montarIntencaoParaIA(intencao = {}) {
-  return {
-    id: intencao.id,
-    tipo: intencao.tipo,
-    risco: Boolean(intencao.risco),
-    contexto: intencao.contexto || '',
-    regrasSeguranca: intencao.regrasSeguranca || [],
-    sugestoes: intencao.sugestoes || [],
-    fallbackLocal: intencao.fallbackLocal || intencao.resposta || null
-  };
-}
-
-function respostaFallbackIntencao(intencao, origem = 'seguranca_dinamica_local') {
-  const resposta = { ...(intencao?.fallbackLocal || intencao?.resposta || RESPOSTAS.incompreensivel) };
-  if ((intencao?.tipo === TIPOS_PUBLICOS.seguranca || intencao?.risco) && !resposta.alertaHumano) {
-    resposta.alertaHumano = ALERTA_HUMANO;
-  }
-  return pacote(intencao?.tipo || TIPOS_PUBLICOS.fallback, respostaPadrao(resposta), origem);
-}
-
-function ehPerguntaConfirmacaoFamiliar(perguntaAtual = '') {
-  const t = normalizarTexto(perguntaAtual);
-  return /(como confirmo|como posso confirmar|como confirmar|o que pergunto|que pergunta faco|posso confiar|e se .*foto|mandou foto|mandar foto|foto.*confiar|numero.*verdadeiro|pessoa.*real)/.test(t);
-}
-
-function historicoIndicaGolpeFamiliar(historico = []) {
-  return historico
-    .slice(-6)
-    .filter((m) => m && m.role === 'user' && typeof m.content === 'string' && !temDadoPessoal(m.content))
-    .some((m) => {
-      const intencao = detectarIntencao(m.content);
-      const t = normalizarTexto(m.content);
-      return ['mensagem_pedindo_dinheiro', 'dinheiro_familiar_ou_valor_alto', 'golpe_familiar_falso', 'pix_urgente_golpe', 'pix_valor_alto'].includes(intencao?.id)
-        || /(?:pessoa|alguem|mensagem|familiar|parente|sobrinho|sobrinha|filho|filha|neto|neta|mae|pai|irmao|irma).{0,60}(dinheiro|pix|transferencia|deposito)|(?:dinheiro|pix|transferencia|deposito).{0,60}(pessoa|alguem|mensagem|familiar|parente|sobrinho|sobrinha|filho|filha|neto|neta|mae|pai|irmao|irma)/.test(t);
-    });
+  const rota = classificarRotaPrincipal(pergunta, []);
+  if (rota === 'dado_sensivel') return INTENCOES.find((i) => i.id === 'dado_sensivel');
+  if (rota === 'risco_real') return INTENCOES.find((i) => i.id === 'risco_real');
+  if (ehPerguntaPixSeguro(normalizarTexto(pergunta))) return INTENCOES.find((i) => i.id === 'pix_seguro');
+  if (rota === 'duvida_digital') return INTENCOES.find((i) => i.id === 'guia_tecnologia');
+  return INTENCOES.find((i) => i.id === 'duvida_geral');
 }
 
 function detectarIntencaoComHistorico(perguntaOriginal = '', historico = []) {
   const rota = classificarRotaPrincipal(perguntaOriginal, historico);
-  const direta = detectarIntencao(perguntaOriginal);
-  if (rota === 'continuidade_risco') {
-    const base = INTENCOES.find((i) => i.id === 'confirmar_identidade_familiar');
-    return { ...base, score: 999, textoNormalizado: normalizarTexto(perguntaOriginal), origem: 'continuidade_segura', rotaPrincipal: rota };
-  }
-  if (direta) return { ...direta, rotaPrincipal: rota };
-  return null;
+  if (rota === 'continuidade') return INTENCOES.find((i) => i.id === 'risco_real');
+  return detectarIntencao(perguntaOriginal);
 }
 
-function contemDadoSensivelCompartilhado(texto = '') {
-  const t = normalizarTexto(texto);
-  return /(minha senha (e|eh)|senha completa|codigo (e|eh)|codigo de sms|meu cpf (e|eh)|cpf completo|numero do cartao|cartao (e|eh)|foto do documento|meu documento|chave do banco|dados bancarios)/.test(t)
-    || /\b\d{11}\b/.test(t)
-    || /\b\d{4}[ -]?\d{4}[ -]?\d{4}[ -]?\d{4}\b/.test(t);
+function selecionarGuia(rota, perguntaAtual = '') {
+  if (rota === 'dado_sensivel') return GUIAS_LOCAIS.dado_sensivel;
+  if (rota === 'risco_real' || rota === 'continuidade') return GUIAS_LOCAIS.risco_real;
+  if (ehPerguntaPixSeguro(normalizarTexto(perguntaAtual))) return GUIAS_LOCAIS.pix_seguro;
+  if (rota === 'duvida_digital') return GUIAS_LOCAIS.tecnologia;
+  return GUIAS_LOCAIS.geral;
 }
 
-function classificarIntencao(pergunta) {
-  const t = normalizarTexto(pergunta);
-  const rota = classificarRotaPrincipal(t, []);
-  if (rota === 'risco_real' || rota === 'continuidade_risco') return TIPOS_PUBLICOS.seguranca;
-  if (rota === 'acao_digital_comum' || /(whatsapp|facebook|messenger|celular|internet|app|aplicativo|volume|wifi|wi-fi|foto|print|computador)/.test(t)) return TIPOS_PUBLICOS.duvida_digital;
-  return TIPOS_PUBLICOS.duvida_geral;
+function historicoSeguroLimitado(historico = [], rota = 'duvida_geral', perguntaAtual = '') {
+  if (rota !== 'continuidade' && !ehContinuidadeCurta(perguntaAtual)) return [];
+  return historico
+    .slice(-4)
+    .filter((m) => m && typeof m.content === 'string' && !temDadoPessoal(m.content))
+    .map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: limparCampoResposta(m.content).slice(0, 180) }));
 }
 
-function respostaUtilSemIA(pergunta = '', tipo = TIPOS_PUBLICOS.duvida_geral) {
-  const t = normalizarTexto(pergunta);
-  if (/atualizar.{0,20}computador|computador.{0,20}atualizar/.test(t)) {
-    return pacote(TIPOS_PUBLICOS.duvida_digital, respostaPadrao({
-      respostaSimples: 'Para atualizar o computador, faça isso com calma e use as configurações oficiais.',
-      passoAPasso: ['Salve o que estiver aberto.', 'Abra Configurações.', 'Procure Atualização ou Windows Update.', 'Toque em Procurar atualizações.', 'Instale apenas o que aparecer ali.', 'Reinicie se o computador pedir.'],
-      atencao: 'Não instale atualização por link recebido em mensagem.',
-      quandoPedirAjuda: 'Peça ajuda se aparecer cobrança, senha, Pix ou link suspeito.'
-    }), 'fallback_util_local');
-  }
-  if (/o que e internet|que e internet|internet/.test(t)) {
-    return pacote(TIPOS_PUBLICOS.duvida_geral, respostaPadrao({
-      respostaSimples: 'Internet é uma rede que liga celulares e computadores para acessar sites, mensagens, vídeos e serviços online.',
-      passoAPasso: [],
-      atencao: 'Use com calma e confira se o site é conhecido antes de informar dados.',
-      quandoPedirAjuda: 'Peça ajuda se um site pedir dados de banco, senha, CPF ou pagamento.'
-    }), 'fallback_util_local');
-  }
-  if (/lista|exercicios|exercícios|treinar|praticar/.test(t) && /celular|whatsapp|uso/.test(t)) {
-    return pacote(TIPOS_PUBLICOS.duvida_digital, respostaPadrao(RESPOSTAS.treino_celular), 'fallback_util_local');
-  }
-  return pacote(tipo, respostaPadrao({
-    respostaSimples: tipo === TIPOS_PUBLICOS.duvida_digital
-      ? 'Posso ajudar com isso. Faça um passo de cada vez e use apenas aplicativos oficiais.'
-      : 'Posso ajudar. Vou responder de forma simples: faça a pergunta com o tema principal e eu explico com calma.',
-    passoAPasso: tipo === TIPOS_PUBLICOS.duvida_digital ? ['Abra o aplicativo ou as configurações oficiais.', 'Procure a opção com calma.', 'Se aparecer senha, cobrança ou link estranho, pare antes de continuar.'] : [],
-    atencao: '',
-    quandoPedirAjuda: 'Peça ajuda se aparecer cobrança, senha, código, banco ou link suspeito.'
-  }), 'fallback_util_local');
-}
-
-function carregarFaq() {
-  return JSON.parse(fs.readFileSync(path.join(process.cwd(), 'data', 'faq.json'), 'utf8'));
-}
-
-function buscarContextoFaq(pergunta, limite = 4) {
-  const q = normalizarTexto(pergunta);
-  return carregarFaq()
-    .filter((i) => normalizarTexto(`${i.categoria} ${i.pergunta} ${(i.palavrasChave || []).join(' ')}`).split(' ').some((tok) => tok && q.includes(tok)))
-    .slice(0, limite);
-}
-
-function limitarRespostaGeral(resposta = {}) {
-  const texto = limparCampoResposta(resposta.respostaSimples || '');
-  const frases = texto.match(/[^.!?]+[.!?]?/g)?.map((f) => f.trim()).filter(Boolean).slice(0, 4) || [];
-  return respostaPadrao({
-    respostaSimples: frases.join(' ') || texto,
-    passoAPasso: Array.isArray(resposta.passoAPasso) ? resposta.passoAPasso.slice(0, 4) : [],
-    atencao: resposta.atencao || '',
-    quandoPedirAjuda: resposta.quandoPedirAjuda || ''
-  });
-}
-
-function extrairJsonIA(raw = '') {
-  const semMarkdown = String(raw).replace(/```json|```/gi, '').trim();
-  const i = semMarkdown.indexOf('{');
-  const f = semMarkdown.lastIndexOf('}');
-  return { semMarkdown, blocos: [semMarkdown, (i >= 0 && f > i) ? semMarkdown.slice(i, f + 1) : ''] };
-}
-
-function parseIA(raw = '') {
-  const { semMarkdown, blocos } = extrairJsonIA(raw);
-  for (const b of blocos) {
-    if (!b) continue;
-    try { return limitarRespostaGeral(JSON.parse(b)); } catch {}
-  }
-  if (semMarkdown.length > 10) return limitarRespostaGeral({ respostaSimples: semMarkdown, passoAPasso: [], atencao: '', quandoPedirAjuda: '' });
-  return null;
-}
-
-function parseIADinamica(raw = '', defaults = {}) {
-  const { semMarkdown, blocos } = extrairJsonIA(raw);
-  for (const b of blocos) {
-    if (!b) continue;
-    try { return respostaPadrao(JSON.parse(b), defaults); } catch {}
-  }
-  if (semMarkdown.length > 10) return respostaPadrao({ respostaSimples: semMarkdown }, defaults);
-  return null;
-}
-
-async function chamarNvidia(pergunta, contextoFaq, intencao, historicoSeguro) {
-  const system = 'Você é Sérgio, assistente acolhedor para idosos da OSSI. Responda em português simples. Para dúvida geral simples, responda naturalmente em 2 a 4 frases. Use linguagem simples. Só use passo a passo quando for ação prática. Não invente. Retorne SOMENTE JSON válido com: {"respostaSimples":"...","passoAPasso":[],"atencao":"","quandoPedirAjuda":""}.';
-  const payload = {
-    model: MODELO_NVIDIA,
-    temperature: 0.2,
-    max_tokens: 500,
-    extra_body: { chat_template_kwargs: { enable_thinking: false } },
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: `Intenção: ${intencao}\nHistórico: ${JSON.stringify(historicoSeguro)}\nPergunta: ${pergunta}\nContexto FAQ: ${JSON.stringify(contextoFaq)}` }
-    ]
+function montarPacoteIA(perguntaAtual, rota, guiaLocal, historicoSeguro = []) {
+  return {
+    perguntaAtual: String(perguntaAtual).slice(0, 800),
+    rotaPrincipal: rota,
+    assuntoDetectado: guiaLocal.id,
+    nivelRisco: guiaLocal.risco,
+    guiaLocal: {
+      id: guiaLocal.id,
+      categoria: guiaLocal.categoria,
+      risco: guiaLocal.risco,
+      contexto: guiaLocal.contexto,
+      passosSugeridos: guiaLocal.passosSugeridos,
+      regrasSeguranca: guiaLocal.regrasSeguranca,
+      nuncaFazer: guiaLocal.nuncaFazer,
+      alertaHumanoPadrao: guiaLocal.alertaHumanoPadrao
+    },
+    contextoInstitucional: 'Você é Sérgio, assistente da Obra Social Santa Isabel no OSSI Ajuda Digital. Ajude pessoas idosas com linguagem simples. Não invente dados institucionais, nomes de autores, links, endereços, horários ou serviços não informados.',
+    historicoSeguro,
+    formatoObrigatorio: CAMPOS_RESPOSTA
   };
-  const resp = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload)
-  });
-  if (!resp.ok) throw new Error('nvidia_http');
-  const data = await resp.json();
-  return parseIA(data?.choices?.[0]?.message?.content || '');
 }
 
-async function chamarNvidiaComPrompt(system, user, parser, maxTokens = 650) {
+function extrairJson(texto = '') {
+  const raw = String(texto || '').trim();
+  try { return JSON.parse(raw); } catch (_) {}
+  const inicio = raw.indexOf('{');
+  const fim = raw.lastIndexOf('}');
+  if (inicio >= 0 && fim > inicio) {
+    try { return JSON.parse(raw.slice(inicio, fim + 1)); } catch (_) {}
+  }
+  return null;
+}
+
+function parseIA(raw = '', defaults = {}) {
+  const json = extrairJson(raw);
+  if (json && typeof json === 'object') return respostaPadrao(json, defaults);
+  return respostaPadrao({ respostaSimples: raw }, defaults);
+}
+
+const parseIADinamica = parseIA;
+
+function validarRespostaIA(resposta, pacoteIA) {
+  const texto = normalizarTexto([
+    resposta?.respostaSimples,
+    ...(resposta?.passoAPasso || []),
+    resposta?.atencao,
+    resposta?.alertaHumano,
+    resposta?.quandoPedirAjuda
+  ].filter(Boolean).join(' '));
+  if (!resposta?.respostaSimples || pareceRespostaTruncada(resposta.respostaSimples)) return { ok: false, motivo: 'resposta_invalida' };
+  if (/\b(envie|manda|mande|faca|faça|confirme)\b.{0,40}\b(dinheiro|pix|transferencia|pagamento)\b/.test(texto) && ['alto', 'critico'].includes(pacoteIA.nivelRisco)) return { ok: false, motivo: 'pagamento_em_risco' };
+  if (/\b(me informe|me diga|envie|mande|digite aqui|compartilhe)\b.{0,50}\b(senha|codigo|token|cpf|cartao|documento|rg|chave pix|dados bancarios)\b/.test(texto)) return { ok: false, motivo: 'pediu_dado_sensivel' };
+  if (/\b(clique|abra|acesse)\b.{0,35}\b(link estranho|link suspeito|link recebido|numero desconhecido)\b/.test(texto)) return { ok: false, motivo: 'link_suspeito' };
+  if (['alto', 'critico'].includes(pacoteIA.nivelRisco) && !resposta.alertaHumano) return { ok: false, motivo: 'sem_alerta_humano' };
+  return { ok: true };
+}
+
+async function chamarNvidiaComPrompt(system, user, parser, maxTokens = 700) {
   const payload = {
     model: MODELO_NVIDIA,
     temperature: 0.15,
@@ -815,82 +382,159 @@ async function chamarNvidiaComPrompt(system, user, parser, maxTokens = 650) {
   return parser(data?.choices?.[0]?.message?.content || '');
 }
 
-async function gerarRespostaDinamicaSegura(perguntaAtual, intencao, historicoSeguro = []) {
-  if (!process.env.NVIDIA_API_KEY) return respostaFallbackIntencao(intencao);
-
-  const fallback = respostaPadrao(intencao.fallbackLocal || intencao.resposta || {});
+async function responderComIAOrientada(perguntaAtual, pacoteIA) {
+  if (!process.env.NVIDIA_API_KEY) throw new Error('ia_indisponivel');
   const system = [
-    'Você é Sérgio, assistente acolhedor da Obra Social Santa Isabel para idosos.',
-    'Responda em português brasileiro simples, com frases curtas e tom calmo.',
-    'Responda a PERGUNTA ATUAL de forma específica. Se for continuidade, use o histórico apenas para entender o assunto e NÃO repita automaticamente o bloco anterior.',
-    'Não invente fatos. Não peça senha completa, código SMS/WhatsApp, CPF completo, número de cartão, documento, foto de documento, chave de banco nem dados bancários.',
-    'Se houver pedido de dinheiro ou dúvida de identidade, nunca recomende enviar dinheiro; oriente confirmar por outro caminho e manter alerta humano.',
-    'Mantenha alertaHumano quando o risco for verdadeiro. Não indique busca web; diga que a confirmação deve ser por canais conhecidos e pessoas de confiança.',
+    'Você é Sérgio, chatbot IA-first da Obra Social Santa Isabel para idosos.',
+    'Responda a pergunta atual de forma específica em português brasileiro simples, com tom calmo.',
+    'Use o guia local como direção e guardrail, mas não copie um bloco pronto quando a pergunta pedir algo específico ou for continuação.',
+    'Use passo a passo quando for ação prática. Não invente dados institucionais.',
+    'Não peça senha, código, CPF completo, cartão, documento, foto de documento, chave Pix ou dados bancários.',
+    'Não recomende Pix, transferência ou pagamento se houver dúvida, urgência, número desconhecido, familiar falso ou risco real.',
+    'Mantenha alertaHumano quando o risco for real.',
+    'Não indique busca web nesta tarefa.',
     'Retorne SOMENTE JSON válido no formato: {"respostaSimples":"...","passoAPasso":[],"atencao":"","quandoPedirAjuda":"","alertaHumano":"","opcoesFluxo":[]}.'
   ].join(' ');
-  const user = JSON.stringify({
-    perguntaAtual,
-    intencao: montarIntencaoParaIA(intencao),
-    historicoSeguro,
-    formatoObrigatorio: ['respostaSimples', 'passoAPasso', 'atencao', 'quandoPedirAjuda', 'alertaHumano', 'opcoesFluxo']
-  });
-  const resposta = await chamarNvidiaComPrompt(system, user, (raw) => parseIADinamica(raw, fallback));
-  if (!resposta?.respostaSimples) throw new Error('ia_dinamica_invalida');
-  if (intencao.risco && !resposta.alertaHumano) resposta.alertaHumano = fallback.alertaHumano || ALERTA_HUMANO;
-  return pacote(intencao.tipo, respostaPadrao(resposta, fallback), 'ia_segura');
+  const fallback = respostaPadrao(selecionarGuia(pacoteIA.rotaPrincipal, perguntaAtual).fallbackLocal);
+  const resposta = await chamarNvidiaComPrompt(system, JSON.stringify(pacoteIA), (raw) => parseIA(raw, fallback));
+  if (['alto', 'critico'].includes(pacoteIA.nivelRisco) && !resposta.alertaHumano) resposta.alertaHumano = pacoteIA.guiaLocal.alertaHumanoPadrao || ALERTA_HUMANO;
+  const validacao = validarRespostaIA(resposta, pacoteIA);
+  if (!validacao.ok) throw new Error(validacao.motivo);
+  return respostaPadrao(resposta, fallback);
+}
+
+function fallbackDigitalEspecifico(pergunta = '') {
+  const t = normalizarTexto(pergunta);
+  if (/instagram/.test(t) && /foto|perfil/.test(t)) {
+    return {
+      respostaSimples: 'Para mudar a foto de perfil no Instagram, faça pelo seu perfil dentro do aplicativo oficial.',
+      passoAPasso: ['Abra o Instagram.', 'Toque na sua foto ou no seu perfil.', 'Toque em Editar perfil.', 'Toque em Alterar foto do perfil.', 'Escolha uma foto da galeria ou tire uma nova.', 'Confira e salve.'],
+      atencao: 'Não informe senha nem código se alguém oferecer fazer isso por você.'
+    };
+  }
+  if (/whatsapp/.test(t) && /foto|perfil/.test(t)) {
+    return {
+      respostaSimples: 'Para mudar a foto de perfil no WhatsApp, entre nas configurações do próprio WhatsApp.',
+      passoAPasso: ['Abra o WhatsApp.', 'Toque em Configurações ou nos três pontinhos.', 'Toque no seu nome ou na sua foto.', 'Toque no ícone da câmera.', 'Escolha Galeria ou Câmera.', 'Ajuste a foto e confirme.'],
+      atencao: 'Use apenas o WhatsApp oficial.'
+    };
+  }
+  if (/apagar|desinstalar|remover/.test(t) && /app|aplicativo/.test(t)) {
+    return {
+      respostaSimples: 'Você pode apagar um aplicativo pelo celular, mas confira antes se não é um app importante.',
+      passoAPasso: ['Encontre o aplicativo na tela do celular.', 'Toque e segure o ícone por alguns segundos.', 'Procure Remover, Desinstalar ou Apagar app.', 'Confirme somente se tiver certeza.', 'Se for app de banco, Gov.br ou WhatsApp, peça ajuda antes.'],
+      atencao: 'Apagar aplicativo pode remover acesso ou dados salvos.'
+    };
+  }
+  if (/atualizar/.test(t) && /computador|notebook|windows/.test(t)) {
+    return {
+      respostaSimples: 'Para atualizar o computador, use a atualização oficial do sistema e faça sem pressa.',
+      passoAPasso: ['Conecte o computador na tomada.', 'Abra Configurações.', 'Procure Windows Update ou Atualização de software.', 'Clique em Verificar atualizações.', 'Se aparecer atualização oficial, instale e aguarde.', 'Não desligue o computador durante a atualização.'],
+      atencao: 'Não instale atualização por link recebido em mensagem.'
+    };
+  }
+  if (/exercicio|exercicios|treinar|lista/.test(t) && /celular|whatsapp|digital/.test(t)) {
+    return {
+      respostaSimples: 'Aqui vai uma lista simples para treinar o uso do celular com segurança.',
+      passoAPasso: ['Aumente e diminua o volume.', 'Conecte e desconecte do Wi‑Fi da casa.', 'Abra o WhatsApp e mande uma mensagem para alguém de confiança.', 'Tire um print da tela.', 'Mude uma foto de perfil de teste, se quiser.', 'Veja se um link parece estranho sem clicar nele.'],
+      atencao: 'Treine sem usar banco, Pix, senha, CPF ou cartão.'
+    };
+  }
+  if (/pix/.test(t)) return RESPOSTAS.pix_seguro;
+  return RESPOSTAS.duvida_digital;
+}
+
+function fallbackGeralEspecifico(pergunta = '') {
+  const t = normalizarTexto(pergunta);
+  if (/mark zuckerberg/.test(t)) return RESPOSTAS.mark;
+  if (/\binternet\b/.test(t)) return RESPOSTAS.internet;
+  if (/quem fez|quem criou|autor|autoria|esse sistema|este sistema/.test(t)) return RESPOSTAS.institucional;
+  if (/bob esponja/.test(t)) return RESPOSTAS.bob;
+  return RESPOSTAS.geral;
+}
+
+function fallbackLocalSeguro(perguntaAtual, rota, guiaLocal) {
+  if (rota === 'incompreensivel') return pacote(TIPOS_PUBLICOS.fallback, RESPOSTAS.incompreensivel, 'bloqueio_local');
+  if (rota === 'dado_sensivel') return pacote(TIPOS_PUBLICOS.seguranca, RESPOSTAS.dados_sensiveis, 'bloqueio_local');
+  if ((rota === 'risco_real' || rota === 'continuidade') && /\b(confirm|confirmo|sobrinho|filho|familiar|parente)\b/.test(normalizarTexto(perguntaAtual))) {
+    return pacote(TIPOS_PUBLICOS.seguranca, {
+      respostaSimples: 'Para confirmar se é mesmo seu familiar, não use só a foto ou o número novo. Confirme por um caminho que você já conhece.',
+      passoAPasso: ['Ligue para o número antigo do seu sobrinho ou familiar.', 'Se não atender, fale com outro parente de confiança.', 'Faça uma pergunta pessoal que só ele saberia responder.', 'Se possível, peça chamada de vídeo.', 'Não envie dinheiro enquanto houver dúvida.'],
+      atencao: 'Foto, nome e voz podem ser copiados ou usados por golpistas.',
+      alertaHumano: ALERTA_HUMANO,
+      quandoPedirAjuda: 'Peça ajuda na Obra Social Santa Isabel ou com um familiar de confiança antes de pagar.'
+    }, 'fallback_local_seguro');
+  }
+  if (rota === 'risco_real' || rota === 'continuidade') return pacote(TIPOS_PUBLICOS.seguranca, guiaLocal.fallbackLocal || RESPOSTAS.risco_real, 'fallback_local_seguro');
+  if (guiaLocal.id === 'pix_seguro') return pacote(TIPOS_PUBLICOS.seguranca, RESPOSTAS.pix_seguro, 'fallback_local_orientado');
+  if (rota === 'duvida_digital') return pacote(TIPOS_PUBLICOS.duvida_digital, fallbackDigitalEspecifico(perguntaAtual), 'fallback_local_orientado');
+  return pacote(TIPOS_PUBLICOS.duvida_geral, fallbackGeralEspecifico(perguntaAtual), 'fallback_local_orientado');
+}
+
+function ehPedidoRepeticao(pergunta = '') {
+  const t = normalizarTexto(pergunta);
+  return /\b(repita|repetir|de novo|saiu quebrada|saiu cortada|nao entendi sua resposta|não entendi sua resposta)\b/.test(t);
+}
+
+function respostaRepeticao(historico = []) {
+  const ultima = [...historico].reverse().find((m) => m?.role === 'assistant' && typeof m.content === 'string' && m.content.trim());
+  if (!ultima) {
+    return pacote(TIPOS_PUBLICOS.fallback, { respostaSimples: 'Preciso que você me diga qual era a dúvida para eu repetir com calma.' }, 'fallback_local');
+  }
+  return pacote(TIPOS_PUBLICOS.fallback, { respostaSimples: `Desculpe, vou repetir com calma: ${limparCampoResposta(ultima.content).slice(0, 500)}` }, 'fallback_local');
+}
+
+async function gerarRespostaDinamicaSegura(perguntaAtual, intencao, historicoSeguro = []) {
+  const guia = GUIAS_LOCAIS[intencao?.guia] || GUIAS_LOCAIS.risco_real;
+  const pacoteIA = montarPacoteIA(perguntaAtual, intencao?.id === 'risco_real' ? 'risco_real' : 'duvida_digital', guia, historicoSeguro);
+  const resposta = await responderComIAOrientada(perguntaAtual, pacoteIA);
+  return pacote(guia.categoria, resposta, 'ia_orientada');
 }
 
 export default async function handler(req, res) {
   res.setHeader?.('Cache-Control', 'no-store, max-age=0');
   res.setHeader?.('Pragma', 'no-cache');
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
+
   const perguntaOriginal = String(req.body?.pergunta || '');
-  const pergunta = normalizarTexto(perguntaOriginal);
   const historico = Array.isArray(req.body?.historico) ? req.body.historico : [];
-  if (!pergunta.trim()) return res.status(400).json({ error: 'Pergunta inválida.' });
+  const rota = classificarRotaPrincipal(perguntaOriginal, historico);
+  if (!normalizarTexto(perguntaOriginal)) return res.status(400).json({ error: 'Pergunta inválida.' });
 
   if (ehPedidoRepeticao(perguntaOriginal)) return res.status(200).json(respostaRepeticao(historico));
 
-  if (contemDadoSensivelCompartilhado(perguntaOriginal)) {
-    return res.status(200).json(pacote(TIPOS_PUBLICOS.seguranca, respostaPadrao(RESPOSTAS.dados_sensiveis), 'bloqueio_local'));
+  const guiaLocal = selecionarGuia(rota, perguntaOriginal);
+
+  if (rota === 'incompreensivel' || rota === 'dado_sensivel') {
+    return res.status(200).json(fallbackLocalSeguro(perguntaOriginal, rota, guiaLocal));
   }
 
-  const intencaoLocal = detectarIntencaoComHistorico(perguntaOriginal, historico);
-  if (intencaoLocal?.dinamicaSegura) {
-    const historicoSeguro = historico
-      .slice(-4)
-      .filter((m) => m && typeof m.content === 'string' && !temDadoPessoal(m.content))
-      .map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content.slice(0, 180) }));
-    try {
-      return res.status(200).json(await gerarRespostaDinamicaSegura(perguntaOriginal, intencaoLocal, historicoSeguro));
-    } catch {
-      return res.status(200).json(respostaFallbackIntencao(intencaoLocal));
-    }
-  }
-  if (intencaoLocal) return res.status(200).json(respostaIntencaoLocal(intencaoLocal));
-
-  if (contemTermoRisco(pergunta)) return res.status(200).json(respostaSegurancaGenerica());
-
-  const intencao = classificarIntencao(pergunta);
-  if (!process.env.NVIDIA_API_KEY) {
-    return res.status(200).json(respostaUtilSemIA(perguntaOriginal, intencao));
-  }
+  const historicoSeguro = historicoSeguroLimitado(historico, rota, perguntaOriginal);
+  const pacoteIA = montarPacoteIA(perguntaOriginal, rota, guiaLocal, historicoSeguro);
 
   try {
-    const contexto = buscarContextoFaq(pergunta);
-    const historicoSeguro = ehContinuidadeCurta(perguntaOriginal)
-      ? historico
-        .slice(-2)
-        .filter((m) => m && m.role === 'user' && typeof m.content === 'string' && !temDadoPessoal(m.content))
-        .map((m) => ({ role: m.role, content: m.content.slice(0, 160) }))
-      : [];
-    const resposta = await chamarNvidia(pergunta, contexto, intencao, historicoSeguro);
-    if (!resposta || !resposta.respostaSimples) throw new Error('ia_invalida');
-    const tipo = intencao === TIPOS_PUBLICOS.duvida_digital ? TIPOS_PUBLICOS.duvida_digital : TIPOS_PUBLICOS.duvida_geral;
-    return res.status(200).json(pacote(tipo, resposta, contexto.length ? 'ia_com_contexto' : 'ia'));
+    const resposta = await responderComIAOrientada(perguntaOriginal, pacoteIA);
+    return res.status(200).json(pacote(guiaLocal.categoria, resposta, 'ia_orientada'));
   } catch {
-    return res.status(200).json(respostaUtilSemIA(perguntaOriginal, intencao));
+    return res.status(200).json(fallbackLocalSeguro(perguntaOriginal, rota, guiaLocal));
   }
 }
 
-export { INTENCOES, TIPOS_PUBLICOS, detectarIntencao, detectarIntencaoComHistorico, normalizarTexto, contemTermoRisco, ehContinuidadeCurta, pareceRespostaTruncada, gerarRespostaDinamicaSegura, classificarRotaPrincipal, contemRiscoReal };
+export {
+  INTENCOES,
+  PACOTES_ORIENTACAO,
+  GUIAS_LOCAIS,
+  TIPOS_PUBLICOS,
+  detectarIntencao,
+  detectarIntencaoComHistorico,
+  normalizarTexto,
+  contemTermoRisco,
+  ehContinuidadeCurta,
+  pareceRespostaTruncada,
+  gerarRespostaDinamicaSegura,
+  montarPacoteIA,
+  responderComIAOrientada,
+  validarRespostaIA,
+  classificarRotaPrincipal,
+  contemRiscoReal
+};

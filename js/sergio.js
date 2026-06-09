@@ -76,8 +76,8 @@ function detectarApoioVisual(resposta = '', pergunta = '', tipo = '') {
   }
 
   const regras = [
-    { termos: ['volume', 'som', 'audio', 'wifi', 'wi-fi', 'print', 'celular'], emoji: '📱', titulo: 'Celular' },
     { termos: ['pix', 'banco', 'dinheiro'], emoji: '💳', titulo: 'Banco e Pix' },
+    { termos: ['volume', 'som', 'audio', 'wifi', 'wi-fi', 'print', 'celular'], emoji: '📱', titulo: 'Celular' },
     { termos: ['whatsapp'], emoji: '🟢', titulo: 'WhatsApp' },
     { termos: ['facebook', 'messenger'], emoji: '💬', titulo: 'Facebook/Messenger' },
     { termos: ['golpe', 'link', 'suspeito', 'urgente'], emoji: '🛡️', titulo: 'Cuidado com golpe' },
