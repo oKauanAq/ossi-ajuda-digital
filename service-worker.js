@@ -1,4 +1,4 @@
-const CACHE = 'ossi-ajuda-v2026-06-08-voz-beta';
+const CACHE = 'ossi-ajuda-v2026-06-09-visual-alertas';
 const ARQUIVOS = [
   './', './index.html', './css/style.css',
   './js/app.js', './js/sergio.js', './js/search.js', './js/ai.js',

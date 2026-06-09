@@ -29,6 +29,7 @@ function textoResposta(payload) {
     payload.resposta?.respostaSimples,
     ...(payload.resposta?.passoAPasso || []),
     payload.resposta?.atencao,
+    payload.resposta?.alertaHumano,
     payload.resposta?.quandoPedirAjuda,
     ...(payload.resposta?.opcoesFluxo || [])
   ].filter(Boolean).join(' | ').toLowerCase();
@@ -69,6 +70,12 @@ const casos = [
   ['enviar pix', 'pix_como_fazer', 'seguranca'],
   ['pagar com piks', 'pix_como_fazer', 'seguranca'],
   ['me pediram pix urgente', 'pix_urgente_golpe', 'seguranca'],
+  ['vou mandar 3000 no pix', 'pix_valor_alto', 'seguranca'],
+  ['vou fazer pix de 3000', 'pix_valor_alto', 'seguranca'],
+  ['mandar dinheiro para desconhecido', 'pix_valor_alto', 'seguranca'],
+  ['pessoa desconhecida pediu dinheiro', 'pix_valor_alto', 'seguranca'],
+  ['pix para pessoa que não conheço', 'pix_valor_alto', 'seguranca'],
+  ['pediram dinheiro urgente', 'pix_valor_alto', 'seguranca'],
   ['problema no banco', 'banco_generico', 'seguranca'],
   ['não consigo entrar no app do banco', 'senha_banco', 'seguranca'],
   ['como ver saldo', 'banco_generico', 'seguranca'],
@@ -170,5 +177,18 @@ assert.deepEqual(respostaBanco.resposta.opcoesFluxo, ['Pix', 'Entrar no app', 'V
 
 const respostaWhatsapp = await chamar('whatsapp não abre');
 assert.deepEqual(respostaWhatsapp.resposta.opcoesFluxo, ['Mandar mensagem', 'Colocar foto', 'Recuperar conta', 'Verificar golpe']);
+
+const respostaPixAlto = await chamar('vou mandar 3000 no pix');
+assert.match(respostaPixAlto.resposta.respostaSimples, /arriscada/i);
+assert.match(respostaPixAlto.resposta.alertaHumano, /Obra Social Santa Isabel/);
+
+const respostaFamiliarFoto = await chamar('uma pessoa com foto do meu filho está pedindo dinheiro');
+assert.match(respostaFamiliarFoto.resposta.alertaHumano, /familiar de confiança|Obra Social Santa Isabel/);
+
+const respostaVolume = await chamar('como aumentar o volume');
+assert.equal(respostaVolume.resposta.alertaHumano, '', 'volume não deve mostrar alerta humano');
+
+const respostaBobSemAlerta = await chamar('quem é o Bob Esponja');
+assert.equal(respostaBobSemAlerta.resposta.alertaHumano, '', 'Bob Esponja não deve mostrar alerta humano');
 
 console.log(`OK: ${casos.length} perguntas e ${normalizacoes.size} normalizações validadas.`);

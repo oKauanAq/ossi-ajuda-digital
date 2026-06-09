@@ -38,7 +38,7 @@ function limparCampoRender(texto = '') {
     .replace(/[{}\[\]"]/g, ' ')
     .replace(/\\[nrt]/g, ' ')
     .replace(/\\/g, ' ')
-    .replace(/\b(resposta\s*simples|respostasimples|passo\s*a\s*passo|passoapasso|atencao|aten[cç][aã]o|quando\s*pedir\s*ajuda|quandopedirajuda)\s*[:=-]?/gi, ' ')
+    .replace(/\b(resposta\s*simples|respostasimples|passo\s*a\s*passo|passoapasso|atencao|aten[cç][aã]o|quando\s*pedir\s*ajuda|quandopedirajuda|alerta\s*humano|alertahumano)\s*[:=-]?/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -49,6 +49,7 @@ function sanitizarResposta(item = {}) {
     respostaSimples: limparCampoRender(item.respostaSimples),
     passoAPasso: passos.map((p) => limparCampoRender(p)).filter(Boolean).slice(0, 6),
     atencao: limparCampoRender(item.atencao),
+    alertaHumano: limparCampoRender(item.alertaHumano),
     quandoPedirAjuda: limparCampoRender(item.quandoPedirAjuda),
     opcoesFluxo: Array.isArray(item.opcoesFluxo) ? item.opcoesFluxo.map((o) => limparCampoRender(o)).filter(Boolean).slice(0, 8) : []
   };
@@ -91,13 +92,14 @@ function montarResposta(item, pergunta = '') {
   const apoio = detectarApoioVisual(limpo.respostaSimples, pergunta, item.categoria || '');
   const passosHtml = limpo.passoAPasso.length ? limpo.passoAPasso.map((p, i) => `<div class="passo-card"><span class="passo-numero">${i + 1}</span><span class="passo-texto">${escaparHtml(p)}</span></div>`).join('') : '';
   const opcoesHtml = limpo.opcoesFluxo.length ? `<div class="chips-sergio-fluxo">${limpo.opcoesFluxo.map((opcao) => `<button type="button" class="chip-sergio" data-flow-option="${escaparHtml(opcao)}">${escaparHtml(opcao)}</button>`).join('')}</div>` : '';
-  const texto = `Resposta simples: ${limpo.respostaSimples}\n${limpo.passoAPasso.length ? `Passo a passo: ${limpo.passoAPasso.join(' ')}\n` : ''}${limpo.atencao ? `Atenção: ${limpo.atencao}\n` : ''}${limpo.quandoPedirAjuda ? `Quando pedir ajuda: ${limpo.quandoPedirAjuda}` : ''}`.trim();
+  const texto = `Resposta simples: ${limpo.respostaSimples}\n${limpo.passoAPasso.length ? `Passo a passo: ${limpo.passoAPasso.join(' ')}\n` : ''}${limpo.atencao ? `Atenção: ${limpo.atencao}\n` : ''}${limpo.alertaHumano ? `Alerta humano: ${limpo.alertaHumano}\n` : ''}${limpo.quandoPedirAjuda ? `Quando pedir ajuda: ${limpo.quandoPedirAjuda}` : ''}`.trim();
   return {
     html: `<div class="bloco-sergio">
       ${apoio ? `<div class="apoio-visual" data-asset-path="assets/guias/"><strong>${apoio.emoji}</strong><span>${escaparHtml(apoio.titulo)}</span></div>` : ''}
       <p class="resposta-destaque">${escaparHtml(limpo.respostaSimples)}</p>
       ${passosHtml ? `<div class="passos-sergio">${passosHtml}</div>` : ""}
       ${limpo.atencao ? `<p class="caixa-atencao"><strong>Atenção:</strong> ${escaparHtml(limpo.atencao)}</p>` : ""}
+      ${limpo.alertaHumano ? `<p class="caixa-alerta-humano">${escaparHtml(limpo.alertaHumano)}</p>` : ""}
       ${limpo.quandoPedirAjuda ? `<p class="caixa-ajuda"><strong>Quando pedir ajuda:</strong> ${escaparHtml(limpo.quandoPedirAjuda)}</p>` : ""}
       ${opcoesHtml}
     </div>`,
