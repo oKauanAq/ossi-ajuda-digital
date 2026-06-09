@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import handler, { detectarIntencao, normalizarTexto, contemTermoRisco } from '../api/sergio.js';
+import handler, { detectarIntencao, normalizarTexto, contemTermoRisco, classificarRotaPrincipal } from '../api/sergio.js';
 
 function criarReq(pergunta, historico = []) {
   return { method: 'POST', body: { pergunta, historico } };
@@ -80,6 +80,9 @@ const casos = [
   ['pessoa desconhecida pediu dinheiro', 'pix_valor_alto', 'seguranca'],
   ['pix para pessoa que não conheço', 'pix_valor_alto', 'seguranca'],
   ['pediram dinheiro urgente', 'pix_valor_alto', 'seguranca'],
+  ['me mandaram mensagem pedindo dinheiro', 'mensagem_pedindo_dinheiro', 'seguranca'],
+  ['recebi mensagem pedindo dinheiro', 'mensagem_pedindo_dinheiro', 'seguranca'],
+  ['alguém pediu dinheiro por mensagem', 'mensagem_pedindo_dinheiro', 'seguranca'],
   ['problema no banco', 'banco_generico', 'seguranca'],
   ['não consigo entrar no app do banco', 'senha_banco', 'seguranca'],
   ['como ver saldo', 'banco_generico', 'seguranca'],
@@ -99,6 +102,8 @@ const casos = [
   // WhatsApp
   ['como mandar mensagem no whatsapp', 'whatsapp_mensagem', 'duvida_digital'],
   ['como colocar foto no whatsapp', 'whatsapp_foto', 'duvida_digital'],
+  ['como mudar a foto de perfil no WhatsApp?', 'whatsapp_foto', 'duvida_digital'],
+  ['Como trocar foto do WhatsApp?', 'whatsapp_foto', 'duvida_digital'],
   ['recebi link no whatsapp', 'link_suspeito', 'seguranca'],
   ['whatsapp não abre', 'whatsapp_generico', 'duvida_digital'],
   ['perdi acesso ao whatsapp', 'senha_whatsapp', 'seguranca'],
@@ -127,13 +132,13 @@ const casos = [
   ['quem é o Bob Esponja', 'bob_esponja', 'duvida_geral'],
   ['Quem é Mark Zuckerberg?', 'mark_zuckerberg', 'duvida_geral'],
   ['Quem é Lara Croft?', 'lara_croft', 'duvida_geral'],
-  ['Me faça uma lista de perguntas para treinar o uso de celular.', 'lista_treino_celular', 'duvida_geral'],
-  ['o que é anime', null, 'fallback'],
-  ['o que é mangá', null, 'fallback'],
-  ['qual o oitavo planeta', null, 'fallback'],
-  ['por que o céu é azul', null, 'fallback'],
-  ['o que é futebol', null, 'fallback'],
-  ['quem inventou o avião', null, 'fallback']
+  ['Me faça uma lista de perguntas para treinar o uso de celular.', 'treino_celular', 'duvida_digital'],
+  ['o que é anime', null, 'duvida_geral'],
+  ['o que é mangá', null, 'duvida_geral'],
+  ['qual o oitavo planeta', null, 'duvida_geral'],
+  ['por que o céu é azul', null, 'duvida_geral'],
+  ['o que é futebol', null, 'duvida_geral'],
+  ['quem inventou o avião', null, 'duvida_geral']
 ];
 
 const normalizacoes = new Map([
@@ -242,9 +247,65 @@ assert.match(respostaMark.resposta.respostaSimples, /Facebook|Meta/i);
 assert.doesNotMatch(textoResposta(respostaMark), /link estranho pode ser golpe/i);
 
 const respostaListaTreino = await chamar('Me faça uma lista de perguntas para treinar o uso de celular.');
-assert.equal(respostaListaTreino.tipo, 'duvida_geral');
-assert.match(respostaListaTreino.resposta.respostaSimples, /aumentar o volume|Wi-Fi|WhatsApp|tirar print/i);
+assert.equal(respostaListaTreino.tipo, 'duvida_digital');
+assert.equal(detectarIntencao('Me faça uma lista de exercícios para treinar o uso de celular.')?.id, 'treino_celular');
+assert.match(textoResposta(respostaListaTreino), /aumente e diminua o volume|wi-fi|whatsapp|tire um print|link parece estranho/i);
 assert.doesNotMatch(textoResposta(respostaListaTreino), /alerta humano|Essa situação é arriscada|Link estranho pode ser golpe/i);
+
+
+
+// A) Ajuda digital vence falso risco por palavras ambíguas.
+for (const pergunta of [
+  'Como mudar a foto de perfil no WhatsApp?',
+  'Como colocar foto no WhatsApp?',
+  'Como mandar mensagem no WhatsApp?',
+  'Me faça uma lista de exercícios para treinar o uso de celular.'
+]) {
+  const payload = await chamar(pergunta);
+  assert.equal(classificarRotaPrincipal(pergunta), 'acao_digital_comum', `rota digital comum em "${pergunta}"`);
+  assert.notEqual(payload.tipo, 'seguranca', `não é golpe em "${pergunta}"`);
+  assert.doesNotMatch(textoResposta(payload), /essa situação é arriscada|não envie dinheiro|mensagem pedindo dinheiro pode ser golpe/i, `sem alerta de golpe em "${pergunta}"`);
+  assert.ok(!payload.resposta.alertaHumano, `sem alertaHumano indevido em "${pergunta}"`);
+}
+
+// B) Risco real exige sinais fortes e mantém alerta apropriado.
+for (const pergunta of [
+  'Me mandaram mensagem pedindo dinheiro.',
+  'Uma pessoa está me pedindo dinheiro.',
+  'Meu tio está pedindo trinta mil reais.',
+  'Vou mandar três mil no pix.',
+  'Recebi um link estranho.'
+]) {
+  const payload = await chamar(pergunta);
+  assert.equal(classificarRotaPrincipal(pergunta), 'risco_real', `rota risco real em "${pergunta}"`);
+  assert.equal(payload.tipo, 'seguranca', `tipo segurança em "${pergunta}"`);
+  assert.match(textoResposta(payload), /não envie|não clique|pare|confirme|peça ajuda|obra social santa isabel/i, `orientação de segurança em "${pergunta}"`);
+  assert.ok(payload.resposta.alertaHumano || /link estranho|senha|cpf|cartão|codigo|código/i.test(textoResposta(payload)), `alerta ou cuidado forte em "${pergunta}"`);
+}
+
+// C) Continuidade curta usa histórico de risco para confirmar identidade.
+{
+  const historicoPedidoDinheiro = [
+    { role: 'user', content: 'Me mandaram mensagem pedindo dinheiro.' },
+    { role: 'assistant', content: 'Não envie dinheiro ainda. Confirme por ligação.' }
+  ];
+  const payload = await chamar('Como confirmo?', historicoPedidoDinheiro);
+  assert.equal(classificarRotaPrincipal('Como confirmo?', historicoPedidoDinheiro), 'continuidade_risco');
+  assert.equal(payload.tipo, 'seguranca');
+  assert.match(textoResposta(payload), /número antigo|numero antigo|ligue|chamada de vídeo|chamada de video|outro familiar|outro parente/i);
+}
+
+// D) Pergunta geral não vira golpe nem link.
+for (const pergunta of ['Quem é Mark Zuckerberg?', 'O que é internet?']) {
+  const payload = await chamar(pergunta);
+  assert.equal(payload.tipo, 'duvida_geral', `pergunta geral em "${pergunta}"`);
+  assert.doesNotMatch(textoResposta(payload), /golpe|link estranho|não envie dinheiro/i, `sem golpe em "${pergunta}"`);
+}
+
+// E) Regressões de segurança e produto.
+assert.equal(detectarIntencao('como fazer pix com segurança')?.id, 'pix_como_fazer');
+assert.equal(detectarIntencao('esqueci minha senha no whatsapp')?.id, 'senha_whatsapp');
+assert.equal(detectarIntencao('como aumentar o volume')?.id, 'celular_volume');
 
 const respostaDadosSensiveis = await chamar('Minha senha completa é 123456 e meu CPF é 12345678901.');
 assert.equal(respostaDadosSensiveis.tipo, 'seguranca');
