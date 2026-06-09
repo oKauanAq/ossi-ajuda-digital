@@ -18,8 +18,11 @@ const TERMOS_RISCO = [
   'senha', 'codigo', 'token', 'pix', 'banco', 'dinheiro', 'pagamento', 'pagar', 'transferencia',
   'deposito', 'boleto', 'link suspeito', 'link estranho', 'cpf', 'cartao', 'documento', 'rg',
   'loja', 'site', 'golpe', 'numero desconhecido', 'numero novo', 'familiar pedindo dinheiro',
-  'pedindo dinheiro', 'pedindo pix', 'pediu dinheiro', 'pediu pix'
+  'pedindo dinheiro', 'pedindo pix', 'pediu dinheiro', 'pediu pix', 'valor alto', 'urgente',
+  'desconhecido', 'pessoa desconhecida', 'numero novo', 'foto do meu filho', 'medo', 'confuso', 'confusa', 'inseguro', 'insegura'
 ];
+
+const ALERTA_HUMANO = '⚠️ Essa situação é arriscada. Antes de enviar dinheiro, senha ou código, fale pessoalmente com um familiar de confiança ou peça ajuda na Obra Social Santa Isabel.';
 
 function aplicarCorrecoesComuns(t = '') {
   let texto = t;
@@ -65,7 +68,7 @@ function limparCampoResposta(valor = '') {
     .replace(/[{}[\]"]/g, ' ')
     .replace(/\\[nrt]/g, ' ')
     .replace(/\\/g, ' ')
-    .replace(/\b(resposta\s*simples|respostasimples|passo\s*a\s*passo|passoapasso|atencao|aten[cç][aã]o|quando\s*pedir\s*ajuda|quandopedirajuda)\s*[:=-]?/gi, ' ')
+    .replace(/\b(resposta\s*simples|respostasimples|passo\s*a\s*passo|passoapasso|atencao|aten[cç][aã]o|quando\s*pedir\s*ajuda|quandopedirajuda|alerta\s*humano|alertahumano)\s*[:=-]?/gi, ' ')
     .replace(/^\s*\d+[.)-]\s*/g, '')
     .replace(/\s+/g, ' ')
     .replace(/,\s*$/, '.')
@@ -88,6 +91,7 @@ function respostaPadrao(resposta = {}, defaults = {}) {
     respostaSimples: limparCampoResposta(resposta.respostaSimples || defaults.respostaSimples || 'Não consegui entender bem. Pode perguntar de outro jeito?'),
     passoAPasso: passos,
     atencao: limparCampoResposta(resposta.atencao || defaults.atencao || ''),
+    alertaHumano: limparCampoResposta(resposta.alertaHumano || defaults.alertaHumano || ''),
     quandoPedirAjuda: limparCampoResposta(resposta.quandoPedirAjuda || defaults.quandoPedirAjuda || ''),
     opcoesFluxo: Array.isArray(resposta.opcoesFluxo) ? resposta.opcoesFluxo.map((o) => limparCampoResposta(o)).filter(Boolean).slice(0, 8) : []
   };
@@ -99,7 +103,11 @@ function respostaPadrao(resposta = {}, defaults = {}) {
   }
 
   const atencaoNorm = normalizarTexto(base.atencao);
+  const alertaNorm = normalizarTexto(base.alertaHumano);
   const ajudaNorm = normalizarTexto(base.quandoPedirAjuda);
+  if (alertaNorm && ajudaNorm && (alertaNorm.includes(ajudaNorm) || ajudaNorm.includes(alertaNorm))) {
+    base.quandoPedirAjuda = '';
+  }
   if (atencaoNorm && ajudaNorm && (atencaoNorm.includes(ajudaNorm) || ajudaNorm.includes(atencaoNorm))) {
     base.quandoPedirAjuda = '';
   }
@@ -165,34 +173,46 @@ const RESPOSTAS = {
     atencao: 'Se o nome ou valor estiver diferente, pare e não confirme.',
     quandoPedirAjuda: 'Peça ajuda antes de fazer Pix alto ou urgente.'
   },
+  pix_valor_alto: {
+    respostaSimples: 'Essa atitude é arriscada, principalmente se você não conhece bem a pessoa. Não envie o Pix agora.',
+    passoAPasso: ['Pare e não confirme o Pix com pressa.', 'Confira o nome, o valor e a história com calma.', 'Confirme por outro meio, como ligação para um número que você já conhece.', 'Se for pessoa desconhecida, não envie dinheiro antes de pedir ajuda.', 'Fale com um familiar de confiança ou com a Obra Social Santa Isabel antes de continuar.'],
+    atencao: 'Pix de valor alto, urgente ou para pessoa desconhecida pode ser golpe.',
+    alertaHumano: ALERTA_HUMANO,
+    quandoPedirAjuda: 'Peça ajuda antes de enviar qualquer valor alto ou urgente.'
+  },
   pix_urgente_golpe: {
     respostaSimples: 'Não envie dinheiro agora. Pedido de Pix urgente pode ser golpe.',
     passoAPasso: ['Pare antes de pagar.', 'Ligue para a pessoa por um número que você já conhece.', 'Confirme a história com calma.', 'Não use o número novo como única confirmação.', 'Peça ajuda a alguém de confiança.'],
     atencao: 'Golpistas usam pressa para fazer você pagar sem pensar.',
+    alertaHumano: ALERTA_HUMANO,
     quandoPedirAjuda: 'Peça ajuda sempre que pedirem dinheiro por mensagem.'
   },
   golpe_familiar_falso: {
     respostaSimples: 'Pode ser golpe. Não envie dinheiro e não responda com pressa.',
     passoAPasso: ['Não faça Pix nem transferência.', 'Não clique em links.', 'Ligue para seu familiar pelo número antigo que você já conhece.', 'Pergunte algo que só ele saberia responder.', 'Se confirmar suspeita, bloqueie e denuncie o contato.', 'Peça ajuda a alguém de confiança.'],
     atencao: 'Golpistas podem usar foto e nome de familiar para enganar.',
+    alertaHumano: ALERTA_HUMANO,
     quandoPedirAjuda: 'Peça ajuda antes de enviar qualquer valor, principalmente se for urgente ou alto.'
   },
   link_suspeito: {
     respostaSimples: 'Link estranho pode ser golpe. Não clique e não preencha dados.',
     passoAPasso: ['Não abra o link se ainda não abriu.', 'Se abriu, não digite senha, CPF, cartão ou código.', 'Feche a página.', 'Abra o aplicativo oficial da empresa para conferir.', 'Apague a mensagem se parecer golpe.'],
     atencao: 'Promoção, prêmio e urgência costumam ser usados em golpes.',
+    alertaHumano: ALERTA_HUMANO,
     quandoPedirAjuda: 'Peça ajuda se você clicou, pagou ou informou dados.'
   },
   loja_confiavel: {
     respostaSimples: 'Posso ajudar a verificar. Qual é o nome ou site da loja?',
     passoAPasso: ['Confira se o endereço do site está correto.', 'Procure CNPJ, telefone e endereço real.', 'Desconfie de preço muito abaixo do normal.', 'Pesquise reclamações da loja.', 'Evite pagar por Pix para pessoa física desconhecida.'],
     atencao: 'Loja falsa costuma usar preço muito barato e pressão para pagar rápido.',
+    alertaHumano: ALERTA_HUMANO,
     quandoPedirAjuda: 'Peça ajuda antes de comprar se tiver dúvida.'
   },
   banco_generico: {
     respostaSimples: 'Entendi. É problema para entrar no app, fazer Pix, ver saldo ou outro assunto?',
     passoAPasso: ['Escolha uma opção abaixo para eu explicar melhor.'],
     atencao: 'Nunca compartilhe senha ou código do banco.',
+    alertaHumano: ALERTA_HUMANO,
     quandoPedirAjuda: 'Peça ajuda antes de confirmar pagamento.',
     opcoesFluxo: ['Pix', 'Entrar no app', 'Ver saldo', 'Outro assunto']
   },
@@ -267,6 +287,7 @@ const RESPOSTAS = {
 
 const INTENCOES = [
   { id: 'incompreensivel', tipo: TIPOS_PUBLICOS.saudacao_ou_vaga, origem: 'habilidade_local', prioridade: 120, risco: false, limite: 1, termosFortes: ['tastando', 'pesquise me senhora', 'escusei me senhora', 'me senhora'], termosFracos: ['abc', 'oi'], resposta: RESPOSTAS.incompreensivel },
+  { id: 'pix_valor_alto', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', prioridade: 118, risco: true, limite: 7, termosFortes: ['vou mandar 3000 no pix', 'vou fazer pix de 3000', 'mandar dinheiro para desconhecido', 'pessoa desconhecida pediu dinheiro', 'pix para pessoa que nao conheco', 'pediram dinheiro urgente'], termosFracos: ['pix', 'dinheiro', 'desconhecido', 'desconhecida', 'urgente', 'valor', 'alto', '3000', 'mandar', 'enviar', 'pessoa', 'conheco', 'conheço'], combinacoesCriticas: [['pix', '3000'], ['dinheiro', 'desconhecido'], ['pessoa', 'desconhecida'], ['pix', 'desconhecido'], ['dinheiro', 'urgente'], ['valor', 'alto']], resposta: RESPOSTAS.pix_valor_alto },
   { id: 'golpe_familiar_falso', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', prioridade: 115, risco: true, limite: 9, termosFortes: ['foto do meu filho', 'foto do meu irmao', 'foto de familiar', 'numero novo dizendo que e minha mae', 'numero novo dizendo que e meu filho', 'outro numero', 'numero novo'], termosFracos: ['filho', 'filha', 'irmao', 'irma', 'mae', 'pai', 'familiar', 'parente', 'foto', 'pediu pix', 'pediu dinheiro', 'pedindo dinheiro', 'pedindo pix'], combinacoesCriticas: [['foto', 'familiar'], ['foto', 'dinheiro'], ['foto', 'pix'], ['numero novo', 'mae'], ['numero novo', 'filho'], ['outro numero', 'dinheiro'], ['familiar', 'dinheiro']], resposta: RESPOSTAS.golpe_familiar_falso },
   { id: 'pix_urgente_golpe', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', prioridade: 110, risco: true, limite: 7, termosFortes: ['me pediram pix urgente', 'pediram dinheiro pelo whatsapp', 'numero pediu pix', 'pessoa pediu dinheiro', 'pediu pix urgente'], termosFracos: ['pix', 'dinheiro', 'urgente', 'whatsapp', 'pediram', 'pediu', 'pessoa'], combinacoesCriticas: [['pix', 'urgente'], ['dinheiro', 'whatsapp'], ['pediu', 'pix'], ['pediram', 'dinheiro']], resposta: RESPOSTAS.pix_urgente_golpe },
   { id: 'senha_whatsapp', tipo: TIPOS_PUBLICOS.seguranca, origem: 'habilidade_local', prioridade: 100, risco: true, limite: 7, termosFortes: ['senha no whatsapp', 'recuperar minha senha no whatsapp', 'esqueci minha senha no whatsapp', 'nao consigo entrar no whatsapp', 'perdi acesso ao whatsapp', 'codigo do whatsapp', 'recuperar conta do whatsapp'], termosFracos: ['senha', 'whatsapp', 'recuperar', 'entrar', 'perdi acesso', 'codigo', 'conta'], combinacoesCriticas: [['senha', 'whatsapp'], ['codigo', 'whatsapp'], ['recuperar', 'whatsapp'], ['entrar', 'whatsapp'], ['acesso', 'whatsapp']], resposta: RESPOSTAS.senha_whatsapp },
@@ -380,18 +401,44 @@ function detectarIntencao(pergunta = '') {
   return melhor;
 }
 
+function extrairMaiorValor(texto = '') {
+  const valores = normalizarTexto(texto).match(/\b\d{3,}(?:[.,]\d{2})?\b/g) || [];
+  return valores.reduce((maior, valor) => {
+    const numero = Number(valor.replace(/\./g, '').replace(',', '.'));
+    return Number.isFinite(numero) ? Math.max(maior, numero) : maior;
+  }, 0);
+}
+
+function deveMostrarAlertaHumano(texto = '') {
+  const t = normalizarTexto(texto);
+  const valorAlto = extrairMaiorValor(t) >= 1000 || /valor alto|muito dinheiro/.test(t);
+  const pixUrgente = /pix/.test(t) && /(urgente|agora|rapido|pressa|mandar|enviar|fazer)/.test(t);
+  const desconhecido = /(desconhecido|desconhecida|nao conheco|nao conheço|numero novo|outro numero)/.test(t);
+  const familiarDinheiro = /(filho|filha|irmao|irma|mae|pai|familiar|parente|foto).{0,50}(dinheiro|pix|valor|deposito|transferencia)|(?:dinheiro|pix|valor|deposito|transferencia).{0,50}(filho|filha|irmao|irma|mae|pai|familiar|parente|foto)/.test(t);
+  const senhaCodigo = /(pediram|pediu|pedindo|pedido|passar|enviar|informar).{0,35}(senha|codigo|token)|(?:senha|codigo|token).{0,35}(pediram|pediu|pedindo|pedido|passar|enviar|informar)/.test(t);
+  const bancoRisco = /banco|app do banco|cartao|cartão/.test(t);
+  const golpeLink = /golpe|link suspeito|link estranho|link.{0,30}(dados|pagamento|pagar|pix|cpf|senha|codigo)/.test(t);
+  const medo = /medo|confuso|confusa|inseguro|insegura|nervoso|nervosa|nao sei o que fazer/.test(t);
+  return valorAlto || pixUrgente || desconhecido || familiarDinheiro || senhaCodigo || bancoRisco || golpeLink || medo;
+}
+
 function respostaSegurancaGenerica() {
   return pacote(TIPOS_PUBLICOS.seguranca, respostaPadrao({
     respostaSimples: 'Esse assunto pode envolver golpe. Não envie dinheiro, senha ou código antes de confirmar.',
     passoAPasso: ['Pare e não faça pagamento agora.', 'Não clique em links.', 'Não envie senha, código, CPF, cartão ou documento.', 'Confirme por outro caminho, como ligação para número conhecido.', 'Peça ajuda a alguém de confiança.'],
     atencao: 'Com pressa é mais fácil cair em golpe.',
+    alertaHumano: ALERTA_HUMANO,
     quandoPedirAjuda: 'Peça ajuda antes de confirmar qualquer pagamento.'
   }), 'seguranca_local');
 }
 
 function respostaIntencaoLocal(intencao) {
   if (!intencao?.resposta) return null;
-  return pacote(intencao.tipo, respostaPadrao(intencao.resposta), intencao.origem || 'habilidade_local');
+  const resposta = { ...intencao.resposta };
+  if ((intencao.tipo === TIPOS_PUBLICOS.seguranca || intencao.risco) && deveMostrarAlertaHumano(intencao.textoNormalizado || '')) {
+    resposta.alertaHumano = resposta.alertaHumano || ALERTA_HUMANO;
+  }
+  return pacote(intencao.tipo, respostaPadrao(resposta), intencao.origem || 'habilidade_local');
 }
 
 function classificarIntencao(pergunta) {
@@ -459,6 +506,8 @@ async function chamarNvidia(pergunta, contextoFaq, intencao, historicoSeguro) {
 }
 
 export default async function handler(req, res) {
+  res.setHeader?.('Cache-Control', 'no-store, max-age=0');
+  res.setHeader?.('Pragma', 'no-cache');
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
   const perguntaOriginal = String(req.body?.pergunta || '');
   const pergunta = normalizarTexto(perguntaOriginal);
