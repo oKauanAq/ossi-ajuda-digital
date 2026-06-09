@@ -19,7 +19,9 @@ const TERMOS_RISCO = [
   'deposito', 'boleto', 'link suspeito', 'link estranho', 'cpf', 'cartao', 'documento', 'rg',
   'loja', 'site', 'golpe', 'numero desconhecido', 'numero novo', 'familiar pedindo dinheiro',
   'pedindo dinheiro', 'pedindo pix', 'pediu dinheiro', 'pediu pix', 'valor alto', 'urgente',
-  'desconhecido', 'pessoa desconhecida', 'numero novo', 'foto do meu filho', 'medo', 'confuso', 'confusa', 'inseguro', 'insegura'
+  'desconhecido', 'pessoa desconhecida', 'numero novo', 'foto do meu filho', 'foto de', 'pessoa com cara de',
+  'parece meu', 'familiar', 'parente', 'tio', 'tia', 'sobrinho', 'sobrinha', 'filho', 'filha', 'neto', 'neta', 'mae', 'pai', 'irmao', 'irma',
+  'trinta mil', 'tres mil', '30 mil', '3000', 'medo', 'confuso', 'confusa', 'inseguro', 'insegura'
 ];
 
 const ALERTA_HUMANO = '⚠️ Essa situação é arriscada. Antes de enviar dinheiro, senha ou código, fale pessoalmente com um familiar de confiança ou peça ajuda na Obra Social Santa Isabel.';
@@ -63,7 +65,7 @@ function normalizarTexto(texto = '') {
 }
 
 function limparCampoResposta(valor = '') {
-  return String(valor)
+  const limpo = String(valor)
     .replace(/```json|```/gi, ' ')
     .replace(/[{}[\]"]/g, ' ')
     .replace(/\\[nrt]/g, ' ')
@@ -72,8 +74,32 @@ function limparCampoResposta(valor = '') {
     .replace(/^\s*\d+[.)-]\s*/g, '')
     .replace(/\s+/g, ' ')
     .replace(/,\s*$/, '.')
-    .trim()
-    .slice(0, 420);
+    .trim();
+
+  if (limpo.length <= 700) return limpo;
+  const limiteSeguro = limpo.slice(0, 700);
+  const fimFrase = Math.max(limiteSeguro.lastIndexOf('.'), limiteSeguro.lastIndexOf('!'), limiteSeguro.lastIndexOf('?'));
+  if (fimFrase >= 120) return limiteSeguro.slice(0, fimFrase + 1).trim();
+  return limiteSeguro.replace(/\s+\S*$/, '').trim().replace(/[,:;\-–—]+$/, '').trim() + '.';
+}
+
+const PALAVRAS_FINAIS_TRUNCADAS = new Set(['por', 'para', 'com', 'de', 'do', 'da', 'dos', 'das', 'em', 'no', 'na', 'nos', 'nas', 'se', 'que', 'porque', 'quando', 'caso', 'for']);
+const RESPOSTA_TRUNCADA_FALLBACK = 'Desculpe, minha resposta anterior pode ter saído incompleta. Não faça nada com pressa e peça ajuda a alguém de confiança antes de continuar.';
+
+function pareceRespostaTruncada(texto = '') {
+  const limpo = String(texto).trim();
+  if (!limpo) return false;
+  const ultimaPalavra = normalizarTexto(limpo).split(' ').filter(Boolean).at(-1) || '';
+  if (PALAVRAS_FINAIS_TRUNCADAS.has(ultimaPalavra)) return true;
+  if (/\b(?:veio por|se for|caso|quando|com)$/i.test(limpo)) return true;
+  const temTamanhoDeFrase = limpo.split(/\s+/).length >= 8;
+  return temTamanhoDeFrase && !/[.!?…]$/.test(limpo);
+}
+
+function garantirRespostaCompleta(texto = '', fallback = RESPOSTA_TRUNCADA_FALLBACK) {
+  const limpo = limparCampoResposta(texto);
+  if (pareceRespostaTruncada(limpo)) return fallback;
+  return limpo;
 }
 
 function respostaPadrao(resposta = {}, defaults = {}) {
@@ -88,7 +114,7 @@ function respostaPadrao(resposta = {}, defaults = {}) {
     : [];
 
   const base = {
-    respostaSimples: limparCampoResposta(resposta.respostaSimples || defaults.respostaSimples || 'Não consegui entender bem. Pode perguntar de outro jeito?'),
+    respostaSimples: garantirRespostaCompleta(resposta.respostaSimples || defaults.respostaSimples || 'Não consegui entender bem. Pode perguntar de outro jeito?', defaults.respostaSimples || RESPOSTA_TRUNCADA_FALLBACK),
     passoAPasso: passos,
     atencao: limparCampoResposta(resposta.atencao || defaults.atencao || ''),
     alertaHumano: limparCampoResposta(resposta.alertaHumano || defaults.alertaHumano || ''),
@@ -194,6 +220,13 @@ const RESPOSTAS = {
     alertaHumano: ALERTA_HUMANO,
     quandoPedirAjuda: 'Peça ajuda antes de enviar qualquer valor, principalmente se for urgente ou alto.'
   },
+  dinheiro_familiar_ou_valor_alto: {
+    respostaSimples: 'Não envie o dinheiro agora. Essa situação é arriscada e precisa ser confirmada com calma.',
+    passoAPasso: ['Não faça Pix nem transferência agora.', 'Ligue para seu familiar usando um número que você já conhece.', 'Se possível, confirme pessoalmente ou com outro parente de confiança.', 'Não clique em links e não envie código, senha, CPF ou documento.', 'Se continuar em dúvida, peça ajuda na Obra Social Santa Isabel antes de fazer qualquer pagamento.'],
+    atencao: 'Golpistas podem usar foto, nome ou aparência de familiares para pedir dinheiro.',
+    alertaHumano: '⚠️ Antes de enviar dinheiro, fale pessoalmente com um familiar de confiança ou peça ajuda na Obra Social Santa Isabel.',
+    quandoPedirAjuda: 'Peça ajuda sempre que pedirem dinheiro alto, Pix urgente, senha, código ou documento.'
+  },
   link_suspeito: {
     respostaSimples: 'Link estranho pode ser golpe. Não clique e não preencha dados.',
     passoAPasso: ['Não abra o link se ainda não abriu.', 'Se abriu, não digite senha, CPF, cartão ou código.', 'Feche a página.', 'Abra o aplicativo oficial da empresa para conferir.', 'Apague a mensagem se parecer golpe.'],
@@ -282,12 +315,31 @@ const RESPOSTAS = {
     passoAPasso: [],
     atencao: '',
     quandoPedirAjuda: ''
+  },
+  mark_zuckerberg: {
+    respostaSimples: 'Mark Zuckerberg é um empresário conhecido por criar o Facebook. Ele também dirige a Meta, empresa responsável por serviços como Facebook, Instagram e WhatsApp.',
+    passoAPasso: [],
+    atencao: '',
+    quandoPedirAjuda: ''
+  },
+  lara_croft: {
+    respostaSimples: 'Lara Croft é uma personagem fictícia dos jogos e filmes Tomb Raider. Ela é conhecida como uma aventureira que explora lugares antigos e resolve mistérios.',
+    passoAPasso: [],
+    atencao: '',
+    quandoPedirAjuda: ''
+  },
+  lista_treino_celular: {
+    respostaSimples: 'Claro. Você pode treinar com perguntas como: como aumentar o volume, como conectar no Wi-Fi, como mandar mensagem no WhatsApp, como tirar print e como identificar um link estranho.',
+    passoAPasso: [],
+    atencao: '',
+    quandoPedirAjuda: ''
   }
 };
 
 const INTENCOES = [
   { id: 'incompreensivel', tipo: TIPOS_PUBLICOS.saudacao_ou_vaga, origem: 'habilidade_local', prioridade: 120, risco: false, limite: 1, termosFortes: ['tastando', 'pesquise me senhora', 'escusei me senhora', 'me senhora'], termosFracos: ['abc', 'oi'], resposta: RESPOSTAS.incompreensivel },
-  { id: 'pix_valor_alto', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', prioridade: 118, risco: true, limite: 7, termosFortes: ['vou mandar 3000 no pix', 'vou fazer pix de 3000', 'mandar dinheiro para desconhecido', 'pessoa desconhecida pediu dinheiro', 'pix para pessoa que nao conheco', 'pediram dinheiro urgente'], termosFracos: ['pix', 'dinheiro', 'desconhecido', 'desconhecida', 'urgente', 'valor', 'alto', '3000', 'mandar', 'enviar', 'pessoa', 'conheco', 'conheço'], combinacoesCriticas: [['pix', '3000'], ['dinheiro', 'desconhecido'], ['pessoa', 'desconhecida'], ['pix', 'desconhecido'], ['dinheiro', 'urgente'], ['valor', 'alto']], resposta: RESPOSTAS.pix_valor_alto },
+  { id: 'dinheiro_familiar_ou_valor_alto', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', prioridade: 125, risco: true, limite: 7, termosFortes: ['meu tio esta pedindo trinta mil reais', 'tio esta pedindo trinta mil', 'pessoa com cara do meu sobrinho', 'parece meu sobrinho', 'pedindo dinheiro', 'pedindo pix', 'pediu dinheiro', 'pediu pix', 'trinta mil', 'tres mil', '30 mil', '3000', 'valor alto'], termosFracos: ['tio', 'tia', 'sobrinho', 'sobrinha', 'filho', 'filha', 'neto', 'neta', 'mae', 'pai', 'irmao', 'irma', 'familiar', 'parente', 'pessoa', 'cara', 'foto', 'parece', 'pedindo', 'pediu', 'dinheiro', 'pix', 'trinta', 'tres', 'mil', '3000', '30', 'valor', 'alto'], combinacoesCriticas: [['tio', 'pedindo'], ['tia', 'pedindo'], ['sobrinho', 'pedindo'], ['sobrinha', 'pedindo'], ['filho', 'pedindo'], ['filha', 'pedindo'], ['neto', 'pedindo'], ['neta', 'pedindo'], ['mae', 'pedindo'], ['pai', 'pedindo'], ['irmao', 'pedindo'], ['irma', 'pedindo'], ['familiar', 'dinheiro'], ['parente', 'dinheiro'], ['pessoa', 'cara', 'sobrinho'], ['parece', 'meu'], ['foto', 'dinheiro'], ['pedindo', 'trinta'], ['pedindo', 'tres'], ['valor', 'alto']], resposta: RESPOSTAS.dinheiro_familiar_ou_valor_alto },
+  { id: 'pix_valor_alto', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', prioridade: 118, risco: true, limite: 7, termosFortes: ['vou mandar 3000 no pix', 'vou fazer pix de 3000', 'vou mandar tres mil no pix', 'mandar dinheiro para desconhecido', 'pessoa desconhecida pediu dinheiro', 'pix para pessoa que nao conheco', 'pediram dinheiro urgente'], termosFracos: ['pix', 'dinheiro', 'desconhecido', 'desconhecida', 'urgente', 'valor', 'alto', '3000', 'tres', 'mil', 'mandar', 'enviar', 'pessoa', 'conheco', 'conheço'], combinacoesCriticas: [['pix', '3000'], ['pix', 'tres', 'mil'], ['dinheiro', 'desconhecido'], ['pessoa', 'desconhecida'], ['pix', 'desconhecido'], ['dinheiro', 'urgente'], ['valor', 'alto']], resposta: RESPOSTAS.pix_valor_alto },
   { id: 'golpe_familiar_falso', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', prioridade: 115, risco: true, limite: 9, termosFortes: ['foto do meu filho', 'foto do meu irmao', 'foto de familiar', 'numero novo dizendo que e minha mae', 'numero novo dizendo que e meu filho', 'outro numero', 'numero novo'], termosFracos: ['filho', 'filha', 'irmao', 'irma', 'mae', 'pai', 'familiar', 'parente', 'foto', 'pediu pix', 'pediu dinheiro', 'pedindo dinheiro', 'pedindo pix'], combinacoesCriticas: [['foto', 'familiar'], ['foto', 'dinheiro'], ['foto', 'pix'], ['numero novo', 'mae'], ['numero novo', 'filho'], ['outro numero', 'dinheiro'], ['familiar', 'dinheiro']], resposta: RESPOSTAS.golpe_familiar_falso },
   { id: 'pix_urgente_golpe', tipo: TIPOS_PUBLICOS.seguranca, origem: 'seguranca_local', prioridade: 110, risco: true, limite: 7, termosFortes: ['me pediram pix urgente', 'pediram dinheiro pelo whatsapp', 'numero pediu pix', 'pessoa pediu dinheiro', 'pediu pix urgente'], termosFracos: ['pix', 'dinheiro', 'urgente', 'whatsapp', 'pediram', 'pediu', 'pessoa'], combinacoesCriticas: [['pix', 'urgente'], ['dinheiro', 'whatsapp'], ['pediu', 'pix'], ['pediram', 'dinheiro']], resposta: RESPOSTAS.pix_urgente_golpe },
   { id: 'senha_whatsapp', tipo: TIPOS_PUBLICOS.seguranca, origem: 'habilidade_local', prioridade: 100, risco: true, limite: 7, termosFortes: ['senha no whatsapp', 'recuperar minha senha no whatsapp', 'esqueci minha senha no whatsapp', 'nao consigo entrar no whatsapp', 'perdi acesso ao whatsapp', 'codigo do whatsapp', 'recuperar conta do whatsapp'], termosFracos: ['senha', 'whatsapp', 'recuperar', 'entrar', 'perdi acesso', 'codigo', 'conta'], combinacoesCriticas: [['senha', 'whatsapp'], ['codigo', 'whatsapp'], ['recuperar', 'whatsapp'], ['entrar', 'whatsapp'], ['acesso', 'whatsapp']], resposta: RESPOSTAS.senha_whatsapp },
@@ -311,19 +363,32 @@ const INTENCOES = [
   { id: 'celular_wifi', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', prioridade: 40, risco: false, limite: 4, termosFortes: ['conectar no wifi', 'conectar no wi-fi', 'entrar no wifi'], termosFracos: ['wifi', 'wi-fi', 'internet', 'conectar'], resposta: RESPOSTAS.celular_wifi },
   { id: 'celular_print', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', prioridade: 38, risco: false, limite: 4, termosFortes: ['tirar print', 'captura de tela'], termosFracos: ['print', 'captura', 'tela'], resposta: RESPOSTAS.celular_print },
   { id: 'instalar_pwa', tipo: TIPOS_PUBLICOS.duvida_digital, origem: 'habilidade_local', prioridade: 36, risco: false, limite: 4, termosFortes: ['instalar na tela inicial', 'adicionar na tela inicial', 'instalar o sistema'], termosFracos: ['instalar', 'tela inicial', 'adicionar'], resposta: RESPOSTAS.instalar_pwa },
-  { id: 'bob_esponja', tipo: TIPOS_PUBLICOS.duvida_geral, origem: 'resposta_local', prioridade: 34, risco: false, limite: 7, termosFortes: ['bob esponja', 'quem e o bob esponja'], termosFracos: ['bob', 'esponja', 'desenho'], combinacoesCriticas: [['bob', 'esponja']], resposta: RESPOSTAS.bob_esponja }
+  { id: 'lista_treino_celular', tipo: TIPOS_PUBLICOS.duvida_geral, origem: 'resposta_local', prioridade: 35, risco: false, limite: 8, termosFortes: ['lista de perguntas para treinar o uso de celular', 'perguntas para treinar o uso de celular', 'faca perguntas para eu treinar', 'lista de perguntas'], termosFracos: ['lista', 'perguntas', 'treinar', 'celular'], combinacoesCriticas: [['perguntas', 'treinar'], ['treinar', 'celular']], resposta: RESPOSTAS.lista_treino_celular },
+  { id: 'bob_esponja', tipo: TIPOS_PUBLICOS.duvida_geral, origem: 'resposta_local', prioridade: 34, risco: false, limite: 7, termosFortes: ['bob esponja', 'quem e o bob esponja'], termosFracos: ['bob', 'esponja', 'desenho'], combinacoesCriticas: [['bob', 'esponja']], resposta: RESPOSTAS.bob_esponja },
+  { id: 'mark_zuckerberg', tipo: TIPOS_PUBLICOS.duvida_geral, origem: 'resposta_local', prioridade: 33, risco: false, limite: 7, termosFortes: ['mark zuckerberg', 'quem e mark zuckerberg'], termosFracos: ['mark', 'zuckerberg'], combinacoesCriticas: [['mark', 'zuckerberg']], resposta: RESPOSTAS.mark_zuckerberg },
+  { id: 'lara_croft', tipo: TIPOS_PUBLICOS.duvida_geral, origem: 'resposta_local', prioridade: 32, risco: false, limite: 7, termosFortes: ['lara croft', 'quem e lara croft'], termosFracos: ['lara', 'croft'], combinacoesCriticas: [['lara', 'croft']], resposta: RESPOSTAS.lara_croft }
 ].sort((a, b) => b.prioridade - a.prioridade);
 
+function termoPresente(t, termo = '') {
+  const normalizado = normalizarTexto(termo);
+  if (!normalizado) return false;
+  if (!normalizado.includes(' ')) {
+    const escapado = normalizado.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|\\s)${escapado}(?=\\s|$)`, 'u').test(t);
+  }
+  return t.includes(normalizado);
+}
+
 function temAlgum(t, termos = []) {
-  return termos.some((termo) => t.includes(termo));
+  return termos.some((termo) => termoPresente(t, termo));
 }
 
 function contarCorrespondencias(t, termos = []) {
-  return termos.filter((termo) => t.includes(termo)).length;
+  return termos.filter((termo) => termoPresente(t, termo)).length;
 }
 
 function temTodos(t, termos = []) {
-  return termos.every((termo) => t.includes(termo));
+  return termos.every((termo) => termoPresente(t, termo));
 }
 
 function ehTextoCurtoSemIntencao(t = '') {
@@ -348,6 +413,58 @@ function ehPerguntaIncompreensivel(texto = '') {
   if (!t) return true;
   if (['pesquise me senhora', 'escusei me senhora', 'me senhora'].some((erro) => t === erro || t.includes(erro))) return true;
   return ehTextoCurtoSemIntencao(t);
+}
+
+function ehContinuidadeCurta(perguntaAtual = '') {
+  const t = normalizarTexto(perguntaAtual);
+  const palavras = t.split(' ').filter(Boolean);
+  if (palavras.length > 5) return false;
+  return [
+    'sim', 'nao', 'nao entendi', 'repita', 'explique melhor', 'pode repetir',
+    'como assim', 'e depois', 'continue', 'continuar', 'isso', 'esse', 'essa',
+    'pode explicar', 'repete'
+  ].includes(t);
+}
+
+function ehPedidoRepeticao(perguntaAtual = '') {
+  const t = normalizarTexto(perguntaAtual);
+  return ehContinuidadeCurta(t) && /(repita|repete|nao entendi|explique melhor|pode repetir|como assim)/.test(t)
+    || /(resposta).{0,30}(quebrada|incompleta).{0,30}(repita|repete|refaca|faca de novo)/.test(t)
+    || /(repita|repete|refaca|faca de novo).{0,30}(resposta|quebrada|incompleta)/.test(t);
+}
+
+function respostaRepeticao(historico = []) {
+  const ultimaPergunta = [...historico]
+    .reverse()
+    .find((m) => m && m.role === 'user' && typeof m.content === 'string' && m.content.trim() && !temDadoPessoal(m.content));
+  const intencaoAnterior = ultimaPergunta ? detectarIntencao(ultimaPergunta.content) : null;
+
+  if (intencaoAnterior) {
+    const pacoteAnterior = respostaIntencaoLocal(intencaoAnterior);
+    pacoteAnterior.resposta.respostaSimples = garantirRespostaCompleta(`Desculpe, vou refazer com calma. ${pacoteAnterior.resposta.respostaSimples}`);
+    pacoteAnterior.origem = 'continuidade_local';
+    return pacoteAnterior;
+  }
+
+  const ultimaResposta = [...historico]
+    .reverse()
+    .find((m) => m && m.role === 'assistant' && typeof m.content === 'string' && m.content.trim() && !temDadoPessoal(m.content));
+
+  if (!ultimaResposta) {
+    return pacote(TIPOS_PUBLICOS.duvida_geral, respostaPadrao({
+      respostaSimples: 'Posso repetir, mas preciso que você me diga qual era a dúvida.',
+      passoAPasso: [],
+      atencao: '',
+      quandoPedirAjuda: ''
+    }), 'continuidade_local');
+  }
+
+  return pacote(TIPOS_PUBLICOS.duvida_geral, respostaPadrao({
+    respostaSimples: `Desculpe, vou repetir com calma. ${ultimaResposta.content}`,
+    passoAPasso: [],
+    atencao: '',
+    quandoPedirAjuda: ''
+  }), 'continuidade_local');
 }
 
 function contemTermoRisco(texto = '') {
@@ -514,6 +631,8 @@ export default async function handler(req, res) {
   const historico = Array.isArray(req.body?.historico) ? req.body.historico : [];
   if (!pergunta.trim()) return res.status(400).json({ error: 'Pergunta inválida.' });
 
+  if (ehPedidoRepeticao(perguntaOriginal)) return res.status(200).json(respostaRepeticao(historico));
+
   const intencaoLocal = detectarIntencao(perguntaOriginal);
   if (intencaoLocal) return res.status(200).json(respostaIntencaoLocal(intencaoLocal));
 
@@ -531,10 +650,12 @@ export default async function handler(req, res) {
 
   try {
     const contexto = buscarContextoFaq(pergunta);
-    const historicoSeguro = historico
-      .slice(-6)
-      .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string' && !temDadoPessoal(m.content))
-      .map((m) => ({ role: m.role, content: m.content.slice(0, 280) }));
+    const historicoSeguro = ehContinuidadeCurta(perguntaOriginal)
+      ? historico
+        .slice(-2)
+        .filter((m) => m && m.role === 'user' && typeof m.content === 'string' && !temDadoPessoal(m.content))
+        .map((m) => ({ role: m.role, content: m.content.slice(0, 160) }))
+      : [];
     const resposta = await chamarNvidia(pergunta, contexto, intencao, historicoSeguro);
     if (!resposta || !resposta.respostaSimples) throw new Error('ia_invalida');
     const tipo = intencao === TIPOS_PUBLICOS.duvida_digital ? TIPOS_PUBLICOS.duvida_digital : TIPOS_PUBLICOS.duvida_geral;
@@ -549,4 +670,4 @@ export default async function handler(req, res) {
   }
 }
 
-export { INTENCOES, TIPOS_PUBLICOS, detectarIntencao, normalizarTexto, contemTermoRisco };
+export { INTENCOES, TIPOS_PUBLICOS, detectarIntencao, normalizarTexto, contemTermoRisco, ehContinuidadeCurta, pareceRespostaTruncada };
