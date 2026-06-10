@@ -18,7 +18,7 @@ const RESPOSTA_TRUNCADA_FALLBACK = 'Desculpe, minha resposta anterior pode ter s
 function aplicarCorrecoesComuns(t = '') {
   let texto = t;
   const substituicoes = [
-    [/\b(?:whastapp|whatsap+|whatss?ap+|watsap+|zap)\b/g, 'whatsapp'],
+    [/\b(?:whastapp|whatsa+p+|whatsap+|whatss?ap+|watsap+|zap)\b/g, 'whatsapp'],
     [/\bface\b/g, 'facebook'],
     [/\bgov\s*br\b/g, 'gov.br'],
     [/\bminhas senha\b/g, 'minha senha'],
@@ -26,7 +26,8 @@ function aplicarCorrecoesComuns(t = '') {
     [/\b(?:pics|piks|pique)\b/g, 'pix'],
     [/\blink\s+(?:extra|estra|estranha|suspeita)\b/g, 'link estranho'],
     [/\bseguranca\b/g, 'seguranca'],
-    [/\bcodigo\b/g, 'codigo']
+    [/\bcodigo\b/g, 'codigo'],
+    [/\bestam\b/g, 'estao']
   ];
   substituicoes.forEach(([padrao, valor]) => { texto = texto.replace(padrao, valor); });
   if (/\b(senha|conta|entrar|recuperar|esqueci|login|acesso)\b/.test(texto)) {
@@ -302,22 +303,37 @@ function ehContinuidadeCurta(pergunta = '') {
   return /\b(android|iphone|computador|como|confirmo|confirmar|posso|faço|faco|agora|isso|ele|ela|e ai|o que|qual|sim|nao|não|depois|confiar|golpe)\b/.test(t);
 }
 
+function normalizarIntencaoContinuidade(texto = '') {
+  let intencao = limparCampoResposta(texto).replace(/[?!.]+$/g, '').trim();
+  intencao = intencao.replace(/^como\s+(eu\s+)?/i, '');
+  intencao = intencao.replace(/^aumento\b/i, 'aumentar').replace(/^apago\b/i, 'apagar').replace(/^mudo\b/i, 'mudar').replace(/^abro\b/i, 'abrir');
+  return intencao.trim();
+}
+
 function detectarContinuidadeDeEscolha(perguntaAtual = '', historicoSeguro = []) {
   const escolha = normalizarTexto(perguntaAtual);
-  const dispositivo = escolha === 'android' ? 'Android' : escolha === 'iphone' ? 'iPhone' : /^(computador|pc|notebook)$/.test(escolha) ? 'computador' : '';
-  if (!dispositivo) return null;
   const historico = Array.isArray(historicoSeguro) ? historicoSeguro : [];
-  for (let i = historico.length - 1; i >= 0; i -= 1) {
-    const msg = historico[i];
-    if (msg?.role !== 'assistant' || !/android/.test(normalizarTexto(msg.content)) || !/iphone/.test(normalizarTexto(msg.content)) || !/computador/.test(normalizarTexto(msg.content))) continue;
-    const anteriorUsuario = historico.slice(0, i).reverse().find((m) => m?.role === 'user' && typeof m.content === 'string' && normalizarTexto(m.content));
-    if (!anteriorUsuario) return null;
-    let intencao = limparCampoResposta(anteriorUsuario.content).replace(/[?!.]+$/g, '').trim();
-    intencao = intencao.replace(/^como\s+(eu\s+)?/i, '');
-    intencao = intencao.replace(/^aumento\b/i, 'aumentar').replace(/^apago\b/i, 'apagar').replace(/^mudo\b/i, 'mudar').replace(/^abro\b/i, 'abrir');
+  const ultimoUsuario = [...historico].reverse().find((m) => m?.role === 'user' && typeof m.content === 'string' && normalizarTexto(m.content));
+
+  const dispositivo = escolha === 'android' ? 'Android' : escolha === 'iphone' ? 'iPhone' : /^(computador|pc|notebook)$/.test(escolha) ? 'computador' : '';
+  if (dispositivo && ultimoUsuario && ehDuvidaDigital(normalizarTexto(ultimoUsuario.content))) {
+    const intencao = normalizarIntencaoContinuidade(ultimoUsuario.content);
     if (!intencao) return null;
-    const perguntaExpandida = `Como ${intencao} no ${dispositivo}?`.replace('no iPhone', 'no iPhone').replace('no Android', 'no Android');
+    const perguntaExpandida = `Como ${intencao} no ${dispositivo}?`;
     return { perguntaExpandida, ultimaIntencao: intencao, dispositivo };
+  }
+
+  const appContinuidade = /^(?:e\s+o\s+|e\s+a\s+|o\s+|a\s+)?(facebook|instagram|whatsapp)$/.exec(escolha);
+  if (appContinuidade && ultimoUsuario) {
+    const app = appContinuidade[1];
+    const anterior = normalizarTexto(ultimoUsuario.content);
+    const nome = app === 'whatsapp' ? 'WhatsApp' : app[0].toUpperCase() + app.slice(1);
+    if (/\babrir\b|\baplicativo\b|\bapp\b/.test(anterior)) {
+      return { perguntaExpandida: `Como abrir o aplicativo ${nome}?`, ultimaIntencao: 'abrir aplicativo', aplicativo: nome };
+    }
+    if (/foto|perfil/.test(anterior)) {
+      return { perguntaExpandida: `Como mudar foto de perfil no ${nome}?`, ultimaIntencao: 'mudar foto de perfil', aplicativo: nome };
+    }
   }
   return null;
 }
@@ -418,9 +434,16 @@ function validarRespostaIA(resposta, pacoteIA) {
     resposta?.quandoPedirAjuda
   ].filter(Boolean).join(' '));
   if (!resposta?.respostaSimples || pareceRespostaTruncada(resposta.respostaSimples)) return { ok: false, motivo: 'resposta_invalida' };
-  if (/\b(envie|manda|mande|faca|faça|confirme)\b.{0,40}\b(dinheiro|pix|transferencia|pagamento)\b/.test(texto) && ['alto', 'critico'].includes(pacoteIA.nivelRisco)) return { ok: false, motivo: 'pagamento_em_risco' };
-  if (/\b(me informe|me diga|envie|mande|digite aqui|compartilhe)\b.{0,50}\b(senha|codigo|token|cpf|cartao|documento|rg|chave pix|dados bancarios)\b/.test(texto)) return { ok: false, motivo: 'pediu_dado_sensivel' };
-  if (/\b(clique|abra|acesse)\b.{0,35}\b(link estranho|link suspeito|link recebido|numero desconhecido)\b/.test(texto)) return { ok: false, motivo: 'link_suspeito' };
+  if (pacoteIA.rotaPrincipal === 'duvida_digital' && /posso ajudar com essa duvida digital diga se voce usa android iphone ou computador para eu orientar melhor/.test(texto)) return { ok: false, motivo: 'fallback_generico_ia' };
+  const orientouPagamentoEmRisco = /\b(envie|manda|mande|faca|faça|confirme)\b.{0,40}\b(dinheiro|pix|transferencia|pagamento)\b/.test(texto);
+  const alertaParaNaoPagar = /\b(nao|nunca|jamais)\b.{0,25}\b(envie|mande|faca|faça|confirme|pague)\b.{0,50}\b(dinheiro|pix|transferencia|pagamento)\b/.test(texto);
+  if (orientouPagamentoEmRisco && !alertaParaNaoPagar && ['alto', 'critico'].includes(pacoteIA.nivelRisco)) return { ok: false, motivo: 'pagamento_em_risco' };
+  const pediuDadoSensivel = /\b(me informe|me diga|envie|mande|digite aqui|compartilhe|passe)\b.{0,50}\b(senha|codigo|token|cpf|cartao|documento|rg|chave pix|dados bancarios|banco)\b/.test(texto);
+  const alertaParaNaoEnviar = /\b(nao|nunca|jamais)\b.{0,30}\b(informe|diga|envie|mande|digite|compartilhe|passe)\b.{0,60}\b(senha|codigo|token|cpf|cartao|documento|rg|chave pix|dados bancarios|banco)\b/.test(texto);
+  if (pediuDadoSensivel && !alertaParaNaoEnviar) return { ok: false, motivo: 'pediu_dado_sensivel' };
+  const mandouAbrirLinkSuspeito = /\b(clique|abra|acesse)\b.{0,35}\b(link estranho|link suspeito|link recebido|numero desconhecido)\b/.test(texto);
+  const alertaParaNaoAbrirLink = /\b(nao|nunca|jamais)\b.{0,20}\b(clique|abra|acesse)\b.{0,45}\b(link estranho|link suspeito|link recebido|numero desconhecido)\b/.test(texto);
+  if (mandouAbrirLinkSuspeito && !alertaParaNaoAbrirLink) return { ok: false, motivo: 'link_suspeito' };
   if (['alto', 'critico'].includes(pacoteIA.nivelRisco) && !resposta.alertaHumano) return { ok: false, motivo: 'sem_alerta_humano' };
   return { ok: true };
 }
@@ -453,6 +476,8 @@ async function responderComIAOrientada(perguntaAtual, pacoteIA) {
     'Responda a pergunta atual de forma específica em português brasileiro simples, com tom calmo.',
     'Use o guia local como direção e guardrail, mas não copie um bloco pronto quando a pergunta pedir algo específico ou for continuação.',
     'Use passo a passo quando for ação prática. Não invente dados institucionais.',
+    'Para dúvidas digitais simples, responda de forma geral primeiro; só pergunte Android, iPhone ou computador quando for indispensável.',
+    'Se a pergunta for sobre ligação no WhatsApp, responda com orientação prática: atender só se conhecer, não passar senha/código/CPF/banco/documento, desligar se pedirem dinheiro e bloquear se insistir.',
     'Não peça senha, código, CPF completo, cartão, documento, foto de documento, chave Pix ou dados bancários.',
     'Não recomende Pix, transferência ou pagamento se houver dúvida, urgência, número desconhecido, familiar falso ou risco real.',
     'Mantenha alertaHumano quando o risco for real.',
@@ -469,6 +494,41 @@ async function responderComIAOrientada(perguntaAtual, pacoteIA) {
 
 function fallbackDigitalEspecifico(pergunta = '') {
   const t = normalizarTexto(pergunta);
+  if (/whatsapp/.test(t) && /ligando|ligacao|chamada|atender/.test(t)) {
+    return {
+      respostaSimples: 'Se estão te ligando no WhatsApp, veja se é alguém conhecido. Se for desconhecido ou pedir dinheiro, código, senha, CPF, banco ou documento, desligue e peça ajuda.',
+      passoAPasso: ['Se conhecer a pessoa e esperava a ligação, pode atender.', 'Se for desconhecido, atenda com cuidado ou não atenda.', 'Não passe senha, código, CPF, dados de banco nem documento.', 'Se pedir dinheiro, desligue e confirme por outro caminho.', 'Se insistir ou incomodar, bloqueie o contato no WhatsApp.'],
+      atencao: 'Golpistas podem ligar pelo WhatsApp fingindo ser conhecidos.'
+    };
+  }
+  if (/facebook/.test(t) && /abrir|app|aplicativo|entrar/.test(t)) {
+    return {
+      respostaSimples: 'Procure o ícone azul do Facebook com a letra F e toque nele. Se não encontrar, use a busca do celular e digite Facebook.',
+      passoAPasso: ['Olhe na tela inicial do celular.', 'Procure o ícone azul com a letra F.', 'Toque uma vez para abrir.', 'Se não encontrar, deslize a tela e use a busca do celular.', 'Digite Facebook e toque no aplicativo oficial.'],
+      atencao: 'Não informe senha ou código fora do aplicativo oficial.'
+    };
+  }
+  if (/instagram/.test(t) && /abrir|app|aplicativo|entrar/.test(t)) {
+    return {
+      respostaSimples: 'Procure o ícone do Instagram no celular e toque nele. Se não encontrar, use a busca do celular.',
+      passoAPasso: ['Olhe na tela inicial do celular.', 'Procure o ícone colorido do Instagram.', 'Toque uma vez para abrir.', 'Se não encontrar, use a busca do celular e digite Instagram.'],
+      atencao: 'Use apenas o aplicativo oficial.'
+    };
+  }
+  if (/volume|som/.test(t)) {
+    return {
+      respostaSimples: 'Use os botões laterais do celular. Aperte o botão de aumentar volume e veja a barra subir na tela.',
+      passoAPasso: ['Segure o celular e procure os botões na lateral.', 'Aperte o botão de cima ou o botão de aumentar volume.', 'Veja a barra de volume subir na tela.', 'Se ainda não ouvir, confira se o celular está no silencioso.'],
+      atencao: 'Evite volume muito alto perto do ouvido.'
+    };
+  }
+  if (/facebook/.test(t) && /foto|perfil/.test(t)) {
+    return {
+      respostaSimples: 'Para mudar a foto de perfil no Facebook, abra seu perfil no aplicativo e escolha a opção de editar a foto.',
+      passoAPasso: ['Abra o Facebook.', 'Toque na sua foto ou no seu nome para abrir o perfil.', 'Toque na foto de perfil.', 'Escolha Selecionar foto do perfil ou Editar foto.', 'Escolha uma foto e salve.'],
+      atencao: 'Não passe senha ou código para outra pessoa trocar a foto por você.'
+    };
+  }
   if (/instagram/.test(t) && /foto|perfil/.test(t)) {
     return {
       respostaSimples: 'Para mudar a foto de perfil no Instagram, faça pelo seu perfil dentro do aplicativo oficial.',
@@ -561,6 +621,7 @@ function mascararDadosSensiveis(texto = '') {
 function criarDebugSeguro(base = {}) {
   return {
     perguntaNormalizada: mascararDadosSensiveis(normalizarTexto(base.perguntaNormalizada || '')),
+    perguntaEfetiva: mascararDadosSensiveis(String(base.perguntaEfetiva || base.perguntaNormalizada || '')),
     rotaPrincipal: base.rotaPrincipal || '',
     guiaEscolhido: base.guiaEscolhido || '',
     riscoDetectado: Boolean(base.riscoDetectado),
@@ -606,7 +667,8 @@ export default async function handler(req, res) {
   const rota = classificarRotaPrincipal(perguntaEfetiva, historico);
   const guiaLocal = selecionarGuia(rota, perguntaEfetiva);
   const debug = {
-    perguntaNormalizada: perguntaEfetiva,
+    perguntaNormalizada: perguntaOriginal,
+    perguntaEfetiva,
     rotaPrincipal: rota,
     guiaEscolhido: guiaLocal.id,
     riscoDetectado: rota === 'risco_real' || rota === 'continuidade' || rota === 'dado_sensivel',
@@ -644,7 +706,7 @@ export default async function handler(req, res) {
     return res.status(200).json(anexarDebugSeguro(payload, debug));
   } catch (erro) {
     const motivo = erro?.message || 'ia_falhou';
-    debug.validacaoRejeitou = ['resposta_invalida', 'pagamento_em_risco', 'pediu_dado_sensivel', 'link_suspeito', 'sem_alerta_humano'].includes(motivo);
+    debug.validacaoRejeitou = ['resposta_invalida', 'pagamento_em_risco', 'pediu_dado_sensivel', 'link_suspeito', 'sem_alerta_humano', 'fallback_generico_ia'].includes(motivo);
     debug.motivoValidacao = debug.validacaoRejeitou ? motivo : '';
     debug.fallbackUsado = true;
     debug.motivoFallback = motivo;
