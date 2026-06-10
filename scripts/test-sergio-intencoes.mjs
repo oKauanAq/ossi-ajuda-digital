@@ -120,7 +120,6 @@ for (const pergunta of [
   'Como mudar a foto de perfil no Facebook?',
   'Como mudar a foto de perfil no Instagram?',
   'Como eu apago o aplicativo?',
-  'Como abrir o Facebook?',
   'Como atualizar o computador?',
   'Me faça uma lista de exercícios para treinar o uso de celular.',
   'Como mudar a foto de perfil no WhatsApp?'
@@ -136,10 +135,35 @@ for (const pergunta of [
 }
 
 
-// A) IA/fallback não genérico para digitais comuns pedidos no fluxo IA-first.
+function assertGuiaUniversalApp(payload, appRegex, mensagem = '') {
+  const texto = textoResposta(payload);
+  assert.equal(payload.tipo, 'duvida_digital', `tipo digital ${mensagem}`);
+  assert.equal(payload.origem, 'rota_direta_abrir_app', `rota direta ${mensagem}`);
+  assert.match(texto, appRegex, `menciona app ${mensagem}`);
+  assert.match(texto, /desbloqueie|tela inicial|deslize|busca do celular|digite|talvez ele não esteja instalado|talvez ele nao esteja instalado/i, `guia universal ${mensagem}`);
+  assert.doesNotMatch(texto, /posso ajudar com essa dúvida digital|diga se você usa android|diga se voce usa android|android, iphone ou computador/i, `sem pergunta de dispositivo ${mensagem}`);
+}
+
+// A) Abrir/encontrar aplicativo usa rota direta universal antes da IA e do fallback genérico.
+{
+  const diretos = [
+    ['como abrir aplicativo facebook', /facebook|letra f/i],
+    ['como abrir facebook', /facebook|letra f/i],
+    ['quero abrir o whatsapp', /whatsapp|telefone branco/i],
+    ['como abrir instagram', /instagram|câmera|camera/i],
+    ['não acho o youtube', /youtube|play/i]
+  ];
+  for (const [pergunta, esperado] of diretos) {
+    const antes = chamadasIA;
+    const payload = await chamar(pergunta);
+    assertGuiaUniversalApp(payload, esperado, pergunta);
+    assert.equal(chamadasIA, antes, `sem IA em "${pergunta}"`);
+  }
+}
+
+// A2) IA/fallback não genérico para digitais comuns que não são abrir aplicativo.
 {
   const digitais = [
-    ['como abrir aplicativo facebook', /facebook|ícone|icone|letra f|busca/i],
     ['como aumentar volume celular', /volume|botões|botoes|lateral|barra/i],
     ['como mudar foto de perfil no Facebook', /facebook|perfil|foto/i],
     ['estão me ligando no WhatsApp', /whatsapp|conhecer|desconhecido|senha|código|codigo|cpf|bloque/i]
@@ -199,26 +223,53 @@ for (const pergunta of [
     { role: 'assistant', content: 'Você usa Android, iPhone ou computador?' }
   ];
   const continuidade = detectarContinuidadeDeEscolha('android', historico);
-  assert.equal(continuidade?.perguntaExpandida, 'Como abrir o WhatsApp no Android?');
+  assert.equal(continuidade?.perguntaExpandida, 'Como abrir o aplicativo WhatsApp?');
   const antigoDebug = process.env.SERGIO_DEBUG;
   process.env.SERGIO_DEBUG = 'true';
   const payload = await chamar('android', historico);
-  assert.equal(payload.debugSeguro?.perguntaEfetiva, 'Como abrir o WhatsApp no Android?');
-  assert.match(textoResposta(payload), /whatsapp|ícone|icone|código|codigo/i);
+  assert.equal(payload.debugSeguro?.perguntaEfetiva, 'Como abrir o aplicativo WhatsApp?');
+  assertGuiaUniversalApp(payload, /whatsapp|telefone branco/i, 'android após abrir app');
   assert.doesNotMatch(textoResposta(payload), /como usar android|sobre usar android/i);
   if (antigoDebug === undefined) delete process.env.SERGIO_DEBUG; else process.env.SERGIO_DEBUG = antigoDebug;
 }
 
-// B4) Se a pessoa não sabe Android/iPhone, explicar sem bloquear o fluxo.
+// B4) Se a pessoa não sabe Android/iPhone após pedir para abrir app, volta ao guia universal.
 {
   const historico = [
     { role: 'user', content: 'quero abrir o whatsapp' },
     { role: 'assistant', content: 'Você usa Android, iPhone ou computador?' }
   ];
   const payload = await chamar('não sei qual é', historico);
-  assert.equal(payload.tipo, 'duvida_digital');
-  assert.match(textoResposta(payload), /android|samsung|motorola|xiaomi|iphone|apple|ícone|icone/i);
-  assert.doesNotMatch(textoResposta(payload), /não entendi bem|nao entendi bem|não ficou claro|nao ficou claro/i);
+  assertGuiaUniversalApp(payload, /whatsapp|telefone branco/i, 'não sei após abrir app');
+}
+
+// B5) Loop Android com histórico maior não pergunta Android/iPhone de novo.
+{
+  const historico = [
+    { role: 'user', content: 'como abrir aplicativo facebook' },
+    { role: 'assistant', content: 'Diga se você usa Android, iPhone ou computador.' },
+    { role: 'user', content: 'não sei' },
+    { role: 'assistant', content: 'Android é Samsung, Motorola; iPhone é Apple.' }
+  ];
+  const payload = await chamar('android', historico);
+  assertGuiaUniversalApp(payload, /facebook|letra f/i, 'loop android facebook');
+}
+
+// D) Não estou achando aplicativo reforça busca, nome do app, instalação e ajuda antes de baixar.
+for (const [pergunta, esperado] of [
+  ['quero abrir o whatsapp mas não to achando ele', /whatsapp|telefone branco/i],
+  ['não encontro o instagram', /instagram|câmera|camera/i]
+]) {
+  const payload = await chamar(pergunta);
+  assertGuiaUniversalApp(payload, esperado, pergunta);
+  assert.match(textoResposta(payload), /busca do celular|digite|não esteja instalado|nao esteja instalado|antes de baixar/i);
+}
+
+// E) App de banco usa guia universal com alerta reforçado de aplicativo oficial e link.
+for (const pergunta of ['como abrir aplicativo do banco', 'não acho o app do banco']) {
+  const payload = await chamar(pergunta);
+  assertGuiaUniversalApp(payload, /banco|símbolo|simbolo/i, pergunta);
+  assert.match(textoResposta(payload), /aplicativo oficial|não instale aplicativo por link|nao instale aplicativo por link|dúvida se o aplicativo é oficial|duvida se o aplicativo e oficial/i);
 }
 
 // C) Ligação no WhatsApp com erro de digitação recebe orientação prática, não institucional.
@@ -236,10 +287,9 @@ for (const pergunta of [
   delete process.env.NVIDIA_API_KEY;
   const antes = chamadasIA;
   const payload = await chamar('como abrir aplicativo facebook');
-  assert.equal(payload.origem, 'fallback_local_orientado');
+  assert.equal(payload.origem, 'rota_direta_abrir_app');
   assert.equal(chamadasIA, antes, 'sem chamada de rede quando não há NVIDIA_API_KEY');
-  assert.match(textoResposta(payload), /facebook|ícone|icone|letra f|busca/i);
-  assert.doesNotMatch(textoResposta(payload), /posso ajudar com essa dúvida digital|diga se você usa android|diga se voce usa android/i);
+  assertGuiaUniversalApp(payload, /facebook|letra f/i, 'abrir app sem IA');
   process.env.NVIDIA_API_KEY = chave;
 }
 
@@ -283,7 +333,7 @@ for (const pergunta of ['Minha senha é 123456', 'Meu CPF é 12345678900']) {
 for (const [pergunta, esperado] of [
   ['Quem é Mark Zuckerberg?', /facebook|meta/i],
   ['O que é internet?', /rede|conecta|wi/i],
-  ['Quem fez esse sistema?', /ossi ajuda digital|obra social santa isabel|não devo inventar/i]
+  ['Quem fez esse sistema?', /ossi ajuda digital|obra social santa isabel/i]
 ]) {
   const payload = await chamar(pergunta);
   assert.equal(classificarRotaPrincipal(pergunta), 'duvida_geral');
@@ -341,10 +391,13 @@ for (const [pergunta, esperado] of [
     assert.ok(Object.hasOwn(payload.debugSeguro, campo), `debugSeguro contém ${campo}`);
   }
   assert.equal(Object.hasOwn(payload.debugSeguro, 'stack'), false, 'debug sem stack trace');
-  const debugDigital = await chamar('Como abrir o Facebook?');
+  const debugDigital = await chamar('como aumentar volume celular');
   assert.equal(debugDigital.debugSeguro.chamouIA, true);
   assert.equal(debugDigital.debugSeguro.iaOk, true);
   assert.equal(debugDigital.debugSeguro.fallbackUsado, false);
+  const debugAppDireto = await chamar('Como abrir o Facebook?');
+  assert.equal(debugAppDireto.debugSeguro.chamouIA, false);
+  assert.equal(debugAppDireto.debugSeguro.origemFinal, 'rota_direta_abrir_app');
   const chave = process.env.NVIDIA_API_KEY;
   delete process.env.NVIDIA_API_KEY;
   const debugFallback = await chamar('como aumentar volume celular');
@@ -373,9 +426,32 @@ for (const [pergunta, esperado] of [
 
 // F) Textos finais não expõem linguagem interna nem login/senha de WhatsApp.
 {
+  const termosInternos = new RegExp([
+    'Explique de forma simples',
+    'sem detalhes técnicos',
+    'dados não confirmados',
+    'use apenas o que está informado no sistema',
+    'não devo inventar',
+    'prompt',
+    'guia local',
+    'pacote de orientação',
+    'durante testes',
+    'senha do whats' + 'app',
+    'login com (?:seu )?n[uú]mero e senha',
+    'faça login com (?:seu )?n[uú]mero e senha'
+  ].join('|'), 'i');
+  for (const pergunta of [
+    'mas como abro o whatsapp no android',
+    'como abrir aplicativo facebook',
+    'Quem fez esse sistema?',
+    'recebi um link estranho',
+    'como fazer Pix com segurança'
+  ]) {
+    const payload = await chamar(pergunta);
+    assert.doesNotMatch(textoResposta(payload), termosInternos, `sem vazamento interno em "${pergunta}"`);
+  }
   const whatsappAndroid = await chamar('mas como abro o whatsapp no android');
-  assert.doesNotMatch(textoResposta(whatsappAndroid), new RegExp(['durante\\s+testes', 'senha do whats' + 'app', 'login com (?:seu )?n[uú]mero e senha', 'faça login com (?:seu )?n[uú]mero e senha'].join('|'), 'i'));
-  assert.match(textoResposta(whatsappAndroid), /whatsapp|ícone|icone|código|codigo|nunca compartilhe/i);
+  assert.match(textoResposta(whatsappAndroid), /whatsapp|ícone|icone|telefone branco|nunca compartilhe/i);
 }
 
 // G) Segurança técnica solicitada.
