@@ -67,6 +67,37 @@ function limparCampoResposta(valor = '') {
   return limiteSeguro.replace(/\s+\S*$/, '').trim().replace(/[,:;\-–—]+$/, '').trim() + '.';
 }
 
+
+function limparPontuacao(texto = '') {
+  return String(texto)
+    .replace(/\s+([,.!?;:])/g, '$1')
+    .replace(/([.!?])\s*,\s*/g, '$1 ')
+    .replace(/,\s*(?=(?:abra|toque|clique|acesse|procure|confira|escolha|digite|entre|va|vá|depois|em seguida|por fim)\b)/gi, '. ')
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([.!?])/g, '$1')
+    .replace(/([.!?]){2,}/g, '$1')
+    .trim();
+}
+
+function limitarRespostaSimples(texto = '') {
+  const limpo = limparPontuacao(texto);
+  const frases = limpo.match(/[^.!?]+[.!?]?/g) || [];
+  if (frases.length <= 2) return limpo;
+  return frases.slice(0, 2).join(' ').trim().replace(/[,:;\-–—]+$/, '').trim();
+}
+
+function extrairPassosDeTexto(texto = '') {
+  const limpo = limparPontuacao(texto);
+  const comQuebras = limpo
+    .replace(/\b(\d{1,2})[.)-]\s*/g, '\n$1. ')
+    .replace(/\s+(?=(?:abra|toque|clique|acesse|procure|confira|escolha|digite|entre|va|vá|depois|em seguida|por fim)\b)/gi, '\n');
+  return comQuebras
+    .split(/\n+|\s*;\s*/)
+    .map((p) => limparCampoResposta(p).replace(/^\d+[.)-]\s*/, ''))
+    .filter((p) => p.split(/\s+/).length >= 2)
+    .slice(0, 6);
+}
+
 function pareceRespostaTruncada(texto = '') {
   const limpo = String(texto).trim();
   if (!limpo) return false;
@@ -85,25 +116,28 @@ function garantirRespostaCompleta(texto = '', fallback = RESPOSTA_TRUNCADA_FALLB
 
 function respostaPadrao(resposta = {}, defaults = {}) {
   const passosVistos = new Set();
-  const passos = Array.isArray(resposta.passoAPasso)
-    ? resposta.passoAPasso.map((p) => limparCampoResposta(p)).filter(Boolean).filter((p) => {
+  const passosOriginais = Array.isArray(resposta.passoAPasso)
+    ? resposta.passoAPasso.map((p) => limparPontuacao(limparCampoResposta(p))).filter(Boolean)
+    : [];
+  const respostaLimpa = garantirRespostaCompleta(resposta.respostaSimples || defaults.respostaSimples || 'Não consegui entender bem. Pode perguntar de outro jeito?', defaults.respostaSimples || RESPOSTA_TRUNCADA_FALLBACK);
+  const passosExtraidos = passosOriginais.length ? [] : extrairPassosDeTexto(respostaLimpa).slice(1);
+  const passos = [...passosOriginais, ...passosExtraidos]
+    .filter((p) => {
       const chave = normalizarTexto(p);
-      if (passosVistos.has(chave)) return false;
+      if (!chave || passosVistos.has(chave)) return false;
       passosVistos.add(chave);
       return true;
-    }).slice(0, 6)
-    : [];
+    }).slice(0, 6);
 
   return {
-    respostaSimples: garantirRespostaCompleta(resposta.respostaSimples || defaults.respostaSimples || 'Não consegui entender bem. Pode perguntar de outro jeito?', defaults.respostaSimples || RESPOSTA_TRUNCADA_FALLBACK),
+    respostaSimples: limitarRespostaSimples(respostaLimpa),
     passoAPasso: passos,
-    atencao: limparCampoResposta(resposta.atencao || defaults.atencao || ''),
-    alertaHumano: limparCampoResposta(resposta.alertaHumano || defaults.alertaHumano || ''),
-    quandoPedirAjuda: limparCampoResposta(resposta.quandoPedirAjuda || defaults.quandoPedirAjuda || ''),
-    opcoesFluxo: Array.isArray(resposta.opcoesFluxo) ? resposta.opcoesFluxo.map((o) => limparCampoResposta(o)).filter(Boolean).slice(0, 8) : []
+    atencao: limparPontuacao(limparCampoResposta(resposta.atencao || defaults.atencao || '')),
+    alertaHumano: limparPontuacao(limparCampoResposta(resposta.alertaHumano || defaults.alertaHumano || '')),
+    quandoPedirAjuda: limparPontuacao(limparCampoResposta(resposta.quandoPedirAjuda || defaults.quandoPedirAjuda || '')),
+    opcoesFluxo: Array.isArray(resposta.opcoesFluxo) ? resposta.opcoesFluxo.map((o) => limparPontuacao(limparCampoResposta(o))).filter(Boolean).slice(0, 8) : []
   };
 }
-
 const pacote = (tipo, resposta, origem, metadados = {}) => ({ tipo, resposta: respostaPadrao(resposta), origem, ...metadados });
 
 const RESPOSTAS = {
@@ -251,11 +285,41 @@ function ehDuvidaDigital(t = '') {
   return /\b(whatsapp|instagram|facebook|celular|telefone|android|iphone|computador|notebook|app|aplicativo|foto|perfil|volume|som|wi-fi|wifi|print|tela|atualizar|apagar|instalar|desinstalar|mensagem|audio|video|exercicios|treinar)\b/.test(t);
 }
 
-function ehContinuidadeCurta(pergunta = '') {
+function ehPerguntaCompletaClara(pergunta = '') {
   const t = normalizarTexto(pergunta);
   if (!t) return false;
+  const palavras = t.split(' ').filter(Boolean);
+  if (/\b(confirmar|confirmo|confiar)\b/.test(t) && /\b(ele|ela|isso|sobrinho|filho|familiar|parente)\b/.test(t)) return false;
+  const temAcao = /\b(como|abrir|mudar|trocar|alterar|aumentar|diminuir|atualizar|apagar|desinstalar|instalar|entrar|acessar|recuperar|quem|o que|qual)\b/.test(t);
+  const temAssunto = /\b(facebook|instagram|whatsapp|foto|perfil|volume|som|computador|notebook|aplicativo|app|internet|mark zuckerberg|celular|android|iphone)\b/.test(t);
+  return palavras.length >= 3 && temAcao && (temAssunto || palavras.length >= 5);
+}
+
+function ehContinuidadeCurta(pergunta = '') {
+  const t = normalizarTexto(pergunta);
+  if (!t || ehPerguntaCompletaClara(pergunta)) return false;
   if (t.split(' ').length > 8) return false;
-  return /\b(como|confirmo|confirmar|posso|faço|faco|agora|isso|ele|ela|e ai|o que|qual|sim|nao|não)\b/.test(t);
+  return /\b(android|iphone|computador|como|confirmo|confirmar|posso|faço|faco|agora|isso|ele|ela|e ai|o que|qual|sim|nao|não|depois|confiar|golpe)\b/.test(t);
+}
+
+function detectarContinuidadeDeEscolha(perguntaAtual = '', historicoSeguro = []) {
+  const escolha = normalizarTexto(perguntaAtual);
+  const dispositivo = escolha === 'android' ? 'Android' : escolha === 'iphone' ? 'iPhone' : /^(computador|pc|notebook)$/.test(escolha) ? 'computador' : '';
+  if (!dispositivo) return null;
+  const historico = Array.isArray(historicoSeguro) ? historicoSeguro : [];
+  for (let i = historico.length - 1; i >= 0; i -= 1) {
+    const msg = historico[i];
+    if (msg?.role !== 'assistant' || !/android/.test(normalizarTexto(msg.content)) || !/iphone/.test(normalizarTexto(msg.content)) || !/computador/.test(normalizarTexto(msg.content))) continue;
+    const anteriorUsuario = historico.slice(0, i).reverse().find((m) => m?.role === 'user' && typeof m.content === 'string' && normalizarTexto(m.content));
+    if (!anteriorUsuario) return null;
+    let intencao = limparCampoResposta(anteriorUsuario.content).replace(/[?!.]+$/g, '').trim();
+    intencao = intencao.replace(/^como\s+(eu\s+)?/i, '');
+    intencao = intencao.replace(/^aumento\b/i, 'aumentar').replace(/^apago\b/i, 'apagar').replace(/^mudo\b/i, 'mudar').replace(/^abro\b/i, 'abrir');
+    if (!intencao) return null;
+    const perguntaExpandida = `Como ${intencao} no ${dispositivo}?`.replace('no iPhone', 'no iPhone').replace('no Android', 'no Android');
+    return { perguntaExpandida, ultimaIntencao: intencao, dispositivo };
+  }
+  return null;
 }
 
 function historicoTemRisco(historico = []) {
@@ -266,8 +330,8 @@ function classificarRotaPrincipal(perguntaAtual = '', historico = []) {
   const t = normalizarTexto(perguntaAtual);
   if (!t || t.length < 2 || /^[?.!\s]+$/.test(perguntaAtual)) return 'incompreensivel';
   if (contemDadoSensivelCompartilhado(perguntaAtual)) return 'dado_sensivel';
-  if (ehContinuidadeCurta(perguntaAtual) && historicoTemRisco(historico)) return 'continuidade';
   if (contemRiscoReal(perguntaAtual)) return 'risco_real';
+  if (ehContinuidadeCurta(perguntaAtual) && !ehPerguntaCompletaClara(perguntaAtual) && historicoTemRisco(historico)) return 'continuidade';
   if (ehPerguntaPixSeguro(t)) return 'duvida_digital';
   if (ehDuvidaDigital(t)) return 'duvida_digital';
   return 'duvida_geral';
@@ -484,6 +548,43 @@ function respostaRepeticao(historico = []) {
   return pacote(TIPOS_PUBLICOS.fallback, { respostaSimples: `Desculpe, vou repetir com calma: ${limparCampoResposta(ultima.content).slice(0, 500)}` }, 'fallback_local');
 }
 
+
+function mascararDadosSensiveis(texto = '') {
+  return String(texto)
+    .replace(/\b\d{3}[.-]?\d{3}[.-]?\d{3}-?\d{2}\b/g, '[CPF]')
+    .replace(/\b\d{13,16}\b/g, '[CARTAO]')
+    .replace(/\b(senha|codigo|código|token|cpf|cartao|cartão|documento|rg|chave pix)\b\s*(?:e|é|eh|:|=)?\s*\S+/gi, '$1 [MASCARADO]')
+    .replace(/\b\d{4,}\b/g, '[NUMERO]')
+    .slice(0, 220);
+}
+
+function criarDebugSeguro(base = {}) {
+  return {
+    perguntaNormalizada: mascararDadosSensiveis(normalizarTexto(base.perguntaNormalizada || '')),
+    rotaPrincipal: base.rotaPrincipal || '',
+    guiaEscolhido: base.guiaEscolhido || '',
+    riscoDetectado: Boolean(base.riscoDetectado),
+    usouHistorico: Boolean(base.usouHistorico),
+    motivoUsoHistorico: base.motivoUsoHistorico || '',
+    chamouIA: Boolean(base.chamouIA),
+    iaOk: Boolean(base.iaOk),
+    validacaoRejeitou: Boolean(base.validacaoRejeitou),
+    motivoValidacao: base.motivoValidacao || '',
+    origemFinal: base.origemFinal || '',
+    fallbackUsado: Boolean(base.fallbackUsado),
+    motivoFallback: base.motivoFallback || ''
+  };
+}
+
+function anexarDebugSeguro(payload, debug) {
+  const resumo = criarDebugSeguro({ ...debug, origemFinal: payload?.origem || debug.origemFinal });
+  if (process.env.SERGIO_DEBUG === 'true') {
+    console.info(`[sergio-debug] rota=${resumo.rotaPrincipal} guia=${resumo.guiaEscolhido} chamouIA=${resumo.chamouIA} fallback=${resumo.fallbackUsado}`);
+    return { ...payload, debugSeguro: resumo };
+  }
+  return payload;
+}
+
 async function gerarRespostaDinamicaSegura(perguntaAtual, intencao, historicoSeguro = []) {
   const guia = GUIAS_LOCAIS[intencao?.guia] || GUIAS_LOCAIS.risco_real;
   const pacoteIA = montarPacoteIA(perguntaAtual, intencao?.id === 'risco_real' ? 'risco_real' : 'duvida_digital', guia, historicoSeguro);
@@ -498,28 +599,59 @@ export default async function handler(req, res) {
 
   const perguntaOriginal = String(req.body?.pergunta || '');
   const historico = Array.isArray(req.body?.historico) ? req.body.historico : [];
-  const rota = classificarRotaPrincipal(perguntaOriginal, historico);
   if (!normalizarTexto(perguntaOriginal)) return res.status(400).json({ error: 'Pergunta inválida.' });
 
-  if (ehPedidoRepeticao(perguntaOriginal)) return res.status(200).json(respostaRepeticao(historico));
+  const continuidadeEscolha = detectarContinuidadeDeEscolha(perguntaOriginal, historico);
+  const perguntaEfetiva = continuidadeEscolha?.perguntaExpandida || perguntaOriginal;
+  const rota = classificarRotaPrincipal(perguntaEfetiva, historico);
+  const guiaLocal = selecionarGuia(rota, perguntaEfetiva);
+  const debug = {
+    perguntaNormalizada: perguntaEfetiva,
+    rotaPrincipal: rota,
+    guiaEscolhido: guiaLocal.id,
+    riscoDetectado: rota === 'risco_real' || rota === 'continuidade' || rota === 'dado_sensivel',
+    usouHistorico: Boolean(continuidadeEscolha) || (rota === 'continuidade' && ehContinuidadeCurta(perguntaEfetiva)),
+    motivoUsoHistorico: continuidadeEscolha ? 'continuidade_de_escolha' : rota === 'continuidade' ? 'pergunta_curta_dependente_com_risco_no_historico' : '',
+    chamouIA: false,
+    iaOk: false,
+    validacaoRejeitou: false,
+    motivoValidacao: '',
+    origemFinal: '',
+    fallbackUsado: false,
+    motivoFallback: ''
+  };
 
-  const guiaLocal = selecionarGuia(rota, perguntaOriginal);
+  if (ehPedidoRepeticao(perguntaOriginal)) {
+    const payload = respostaRepeticao(historico);
+    return res.status(200).json(anexarDebugSeguro(payload, { ...debug, origemFinal: payload.origem, fallbackUsado: true, motivoFallback: 'pedido_repeticao' }));
+  }
 
   if (rota === 'incompreensivel' || rota === 'dado_sensivel') {
-    return res.status(200).json(fallbackLocalSeguro(perguntaOriginal, rota, guiaLocal));
+    const payload = fallbackLocalSeguro(perguntaEfetiva, rota, guiaLocal);
+    return res.status(200).json(anexarDebugSeguro(payload, { ...debug, origemFinal: payload.origem, fallbackUsado: true, motivoFallback: rota }));
   }
 
-  const historicoSeguro = historicoSeguroLimitado(historico, rota, perguntaOriginal);
-  const pacoteIA = montarPacoteIA(perguntaOriginal, rota, guiaLocal, historicoSeguro);
+  const historicoSeguro = historicoSeguroLimitado(historico, rota, perguntaEfetiva);
+  debug.usouHistorico = debug.usouHistorico || historicoSeguro.length > 0;
+  if (!debug.motivoUsoHistorico && historicoSeguro.length > 0) debug.motivoUsoHistorico = 'pergunta_curta_dependente';
+  const pacoteIA = montarPacoteIA(perguntaEfetiva, rota, guiaLocal, historicoSeguro);
 
   try {
-    const resposta = await responderComIAOrientada(perguntaOriginal, pacoteIA);
-    return res.status(200).json(pacote(guiaLocal.categoria, resposta, 'ia_orientada'));
-  } catch {
-    return res.status(200).json(fallbackLocalSeguro(perguntaOriginal, rota, guiaLocal));
+    debug.chamouIA = Boolean(process.env.NVIDIA_API_KEY);
+    const resposta = await responderComIAOrientada(perguntaEfetiva, pacoteIA);
+    debug.iaOk = true;
+    const payload = pacote(guiaLocal.categoria, resposta, 'ia_orientada');
+    return res.status(200).json(anexarDebugSeguro(payload, debug));
+  } catch (erro) {
+    const motivo = erro?.message || 'ia_falhou';
+    debug.validacaoRejeitou = ['resposta_invalida', 'pagamento_em_risco', 'pediu_dado_sensivel', 'link_suspeito', 'sem_alerta_humano'].includes(motivo);
+    debug.motivoValidacao = debug.validacaoRejeitou ? motivo : '';
+    debug.fallbackUsado = true;
+    debug.motivoFallback = motivo;
+    const payload = fallbackLocalSeguro(perguntaEfetiva, rota, guiaLocal);
+    return res.status(200).json(anexarDebugSeguro(payload, debug));
   }
 }
-
 export {
   INTENCOES,
   PACOTES_ORIENTACAO,
@@ -530,6 +662,8 @@ export {
   normalizarTexto,
   contemTermoRisco,
   ehContinuidadeCurta,
+  ehPerguntaCompletaClara,
+  detectarContinuidadeDeEscolha,
   pareceRespostaTruncada,
   gerarRespostaDinamicaSegura,
   montarPacoteIA,
