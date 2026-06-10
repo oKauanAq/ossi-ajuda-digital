@@ -52,6 +52,14 @@ const golpeFamiliar = await apoioVisual('uma pessoa com foto do meu filho está 
 assert.equal(golpeFamiliar.apoio?.emoji, '🛡️');
 assert.equal(golpeFamiliar.apoio?.titulo, 'Cuidado com golpe');
 
+const ligacaoWhatsApp = await apoioVisual('estam me ligando no whatsaapp');
+assert.equal(ligacaoWhatsApp.apoio?.emoji, '🟢');
+assert.equal(ligacaoWhatsApp.apoio?.titulo, 'WhatsApp');
+
+const ligacaoWhatsAppComCodigo = await apoioVisual('estão me ligando no WhatsApp pedindo código');
+assert.equal(ligacaoWhatsAppComCodigo.apoio?.emoji, '🛡️');
+assert.equal(ligacaoWhatsAppComCodigo.apoio?.titulo, 'Cuidado com golpe');
+
 const linkEstranho = await apoioVisual('recebi um link estranho no WhatsApp');
 assert.equal(linkEstranho.apoio?.emoji, '🛡️');
 assert.equal(linkEstranho.apoio?.titulo, 'Cuidado com golpe');
