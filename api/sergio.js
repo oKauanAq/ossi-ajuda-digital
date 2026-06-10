@@ -175,13 +175,13 @@ const RESPOSTAS = {
     opcoesFluxo: ['Android', 'iPhone', 'Computador', 'WhatsApp', 'Instagram']
   },
   geral: {
-    respostaSimples: 'Posso responder de forma simples, mas não devo inventar informações. Se for sobre a Obra Social Santa Isabel, use apenas o que está informado no sistema ou pergunte a alguém da instituição.',
+    respostaSimples: 'Posso responder de forma simples. Se for sobre a Obra Social Santa Isabel, confirme informações oficiais diretamente com alguém da instituição.',
     passoAPasso: [],
     atencao: 'Se aparecer pedido de dinheiro, senha, código ou link estranho, trate como risco.'
   },
   institucional: {
     respostaSimples: 'Este sistema é o OSSI Ajuda Digital, criado para apoiar pessoas idosas com dúvidas digitais na Obra Social Santa Isabel.',
-    passoAPasso: ['Ele reúne uma central de ajuda e o assistente Sérgio.', 'O objetivo é orientar com linguagem simples e cuidado com golpes.', 'Eu não devo inventar nomes de autores, equipes ou dados institucionais que não estejam no sistema.'],
+    passoAPasso: ['Ele reúne uma central de ajuda e o assistente Sérgio.', 'O objetivo é orientar com linguagem simples e cuidado com golpes.', 'Para informações institucionais, confirme diretamente com a Obra Social Santa Isabel.'],
     atencao: 'Para informações oficiais, confirme diretamente com a Obra Social Santa Isabel.'
   },
   mark: {
@@ -239,6 +239,111 @@ const GUIAS_LOCAIS = {
     nuncaFazer: ['inventar autoria do sistema', 'fornecer dados atuais não confirmados como definitivos'], alertaHumanoPadrao: '', fallbackLocal: RESPOSTAS.geral
   }
 };
+
+
+const ICONES_APLICATIVOS = {
+  whatsapp: 'ícone verde com um telefone branco',
+  facebook: 'ícone azul com a letra F',
+  instagram: 'ícone colorido com desenho de câmera',
+  youtube: 'ícone vermelho com botão de play',
+  messenger: 'ícone de conversa azul, roxo ou branco',
+  banco: 'ícone com o nome ou símbolo do seu banco',
+  'gov.br': 'ícone oficial do Gov.br',
+  generico: 'ícone com o nome do aplicativo'
+};
+
+const NOMES_APLICATIVOS = {
+  whatsapp: 'WhatsApp',
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  youtube: 'YouTube',
+  messenger: 'Messenger',
+  banco: 'aplicativo do banco',
+  'gov.br': 'Gov.br',
+  pix: 'aplicativo do banco',
+  documento: 'aplicativo de documento',
+  saude: 'aplicativo de saúde',
+  generico: 'aplicativo'
+};
+
+function detectarAppReconhecido(texto = '') {
+  const t = normalizarTexto(texto);
+  if (/\bwhatsapp\b/.test(t)) return 'whatsapp';
+  if (/\bfacebook\b/.test(t)) return 'facebook';
+  if (/\binstagram\b/.test(t)) return 'instagram';
+  if (/\byoutube\b/.test(t)) return 'youtube';
+  if (/\bmessenger\b/.test(t)) return 'messenger';
+  if (/\bgov\.br\b|\bgovbr\b/.test(t)) return 'gov.br';
+  if (/\bpix\b/.test(t)) return 'pix';
+  if (/\bbanco\b|\bcaixa\b|\bitau\b|\bbradesco\b|\bsantander\b|\bnubank\b|\bbanco do brasil\b/.test(t)) return 'banco';
+  if (/\bdocumento\b|\brg\b|\bcnh\b|\bcarteira digital\b/.test(t)) return 'documento';
+  if (/\bsaude\b|\bsus\b/.test(t)) return 'saude';
+  if (/\b(app|aplicativo)\b/.test(t)) return 'generico';
+  return '';
+}
+
+function ehIntencaoAbrirOuEncontrarAplicativo(texto = '') {
+  const t = normalizarTexto(texto);
+  const temAcaoDireta = /\b(?:abrir|abro)\s+(?:o\s+|a\s+)?(?:app|aplicativo)\b/.test(t)
+    || /\b(?:abrir|abro)\s+(?:o\s+|a\s+)?(?:facebook|whatsapp|instagram|youtube|messenger|banco|gov\.br|govbr|pix)\b/.test(t)
+    || /\b(?:quero|preciso)\s+(?:abrir|abro)\b/.test(t)
+    || /\bcomo\s+(?:abrir|abro)\b/.test(t)
+    || /\b(?:encontrar|procurar)\s+(?:o\s+|a\s+)?(?:app|aplicativo)\b/.test(t);
+  const temNaoAcho = /\b(?:nao acho|nao estou achando|nao to achando|nao encontro|sumiu|cade)\b/.test(t);
+  const temApp = Boolean(detectarAppReconhecido(t));
+  return temApp && (temAcaoDireta || temNaoAcho);
+}
+
+function appSensivel(app = '') {
+  return ['banco', 'pix', 'gov.br', 'documento', 'saude'].includes(app);
+}
+
+function responderAbrirAplicativoUniversal(app = 'generico') {
+  const chave = app || 'generico';
+  const nome = NOMES_APLICATIVOS[chave] || NOMES_APLICATIVOS.generico;
+  const descricaoIcone = ICONES_APLICATIVOS[chave] || ICONES_APLICATIVOS.generico;
+  const sensivel = appSensivel(chave);
+  return {
+    respostaSimples: `Para abrir o ${nome}, procure o ícone do aplicativo na tela do celular. Se não encontrar, use a busca do celular e digite ${nome}.`,
+    passoAPasso: [
+      'Desbloqueie o celular.',
+      `Procure o ícone do ${nome} na tela inicial.`,
+      'Se não encontrar, deslize para ver outras telas.',
+      `Use a busca do celular e digite ${nome}.`,
+      `Confira se o ícone parece com ${descricaoIcone}.`,
+      'Toque no aplicativo para abrir.',
+      'Se não aparecer, talvez ele não esteja instalado. Peça ajuda antes de baixar qualquer aplicativo.'
+    ],
+    atencao: sensivel
+      ? 'Abra apenas o aplicativo oficial. Não instale aplicativo por link recebido em mensagem. Nunca envie senha, código, CPF, cartão ou documento para outras pessoas.'
+      : 'Nunca envie senha, código, CPF, cartão ou documento para outras pessoas.',
+    quandoPedirAjuda: sensivel
+      ? 'Peça ajuda se tiver dúvida se o aplicativo é oficial.'
+      : 'Peça ajuda se o aplicativo não aparecer, se pedir pagamento, se vier por link ou se você não tiver certeza de que é o aplicativo oficial.'
+  };
+}
+
+function detectarPedidoAbrirAplicativo(pergunta = '') {
+  if (!ehIntencaoAbrirOuEncontrarAplicativo(pergunta)) return null;
+  return { app: detectarAppReconhecido(pergunta) || 'generico' };
+}
+
+function detectarPedidoAbrirAplicativoPendente(historico = []) {
+  return [...(Array.isArray(historico) ? historico : [])]
+    .reverse()
+    .filter((m) => m?.role === 'user' && typeof m.content === 'string')
+    .map((m) => detectarPedidoAbrirAplicativo(m.content))
+    .find(Boolean) || null;
+}
+
+function ehRespostaCurtaDeDispositivoOuDuvida(pergunta = '') {
+  const t = normalizarTexto(pergunta);
+  return /^(?:eu\s+)?(?:uso\s+)?android(?:\s+me ajude)?$/.test(t)
+    || /^(?:eu\s+)?(?:uso\s+)?iphone(?:\s+me ajude)?$/.test(t)
+    || /^(?:eu\s+)?(?:uso\s+)?(?:computador|pc|notebook)(?:\s+me ajude)?$/.test(t)
+    || /^(?:eu\s+)?nao sei(?: qual e| o que e isso| o que e android)?$/.test(t)
+    || /^(?:eu\s+)?nao entendi$/.test(t);
+}
 
 const PACOTES_ORIENTACAO = GUIAS_LOCAIS;
 
@@ -356,6 +461,11 @@ function detectarContinuidadeDeEscolha(perguntaAtual = '', historicoSeguro = [])
 
   const dispositivo = escolha === 'android' ? 'Android' : escolha === 'iphone' ? 'iPhone' : /^(computador|pc|notebook)$/.test(escolha) ? 'computador' : '';
   if (dispositivo && ultimoUsuario && assistentePerguntouDispositivo(historico) && ehDuvidaDigital(normalizarTexto(ultimoUsuario.content))) {
+    const pedidoApp = detectarPedidoAbrirAplicativoPendente(historico);
+    if (pedidoApp) {
+      const nome = NOMES_APLICATIVOS[pedidoApp.app] || NOMES_APLICATIVOS.generico;
+      return { perguntaExpandida: `Como abrir o aplicativo ${nome}?`, ultimaIntencao: 'abrir aplicativo', aplicativo: nome };
+    }
     const intencao = normalizarIntencaoContinuidade(ultimoUsuario.content);
     if (!intencao) return null;
     const preposicao = dispositivo === 'computador' ? 'no' : 'no';
@@ -363,11 +473,11 @@ function detectarContinuidadeDeEscolha(perguntaAtual = '', historicoSeguro = [])
     return { perguntaExpandida, ultimaIntencao: intencao, dispositivo };
   }
 
-  const appContinuidade = /^(?:e\s+o\s+|e\s+a\s+|e\s+|o\s+|a\s+)?(facebook|instagram|whatsapp|youtube)$/.exec(escolha);
+  const appContinuidade = /^(?:e\s+o\s+|e\s+a\s+|e\s+|o\s+|a\s+)?(facebook|instagram|whatsapp|youtube|messenger)$/.exec(escolha);
   if (appContinuidade && ultimoUsuario) {
     const app = appContinuidade[1];
     const anterior = normalizarTexto(ultimoUsuario.content);
-    const nomes = { whatsapp: 'WhatsApp', youtube: 'YouTube', facebook: 'Facebook', instagram: 'Instagram' };
+    const nomes = { whatsapp: 'WhatsApp', youtube: 'YouTube', facebook: 'Facebook', instagram: 'Instagram', messenger: 'Messenger' };
     const nome = nomes[app] || app[0].toUpperCase() + app.slice(1);
     if (/\babrir\b|\baplicativo\b|\bapp\b/.test(anterior)) {
       return { perguntaExpandida: `Como abrir o aplicativo ${nome}?`, ultimaIntencao: 'abrir aplicativo', aplicativo: nome };
@@ -484,6 +594,7 @@ function validarRespostaIA(resposta, pacoteIA) {
     resposta?.quandoPedirAjuda
   ].filter(Boolean).join(' '));
   if (!resposta?.respostaSimples || pareceRespostaTruncada(resposta.respostaSimples)) return { ok: false, motivo: 'resposta_invalida' };
+  if (/\b(explique de forma simples|sem detalhes tecnicos|dados nao confirmados|use apenas o que esta informado no sistema|nao devo inventar|prompt|guia local|pacote de orientacao|durante testes)\b/.test(texto)) return { ok: false, motivo: 'linguagem_interna' };
   if (pacoteIA.rotaPrincipal === 'duvida_digital' && /posso ajudar com essa duvida digital diga se voce usa android iphone ou computador para eu orientar melhor/.test(texto)) return { ok: false, motivo: 'fallback_generico_ia' };
   const orientouPagamentoEmRisco = /\b(envie|manda|mande|faca|faça|confirme)\b.{0,40}\b(dinheiro|pix|transferencia|pagamento)\b/.test(texto);
   const alertaParaNaoPagar = /\b(nao|nunca|jamais)\b.{0,25}\b(envie|mande|faca|faça|confirme|pague)\b.{0,50}\b(dinheiro|pix|transferencia|pagamento)\b/.test(texto);
@@ -545,6 +656,8 @@ async function responderComIAOrientada(perguntaAtual, pacoteIA) {
 }
 
 function fallbackDigitalEspecifico(pergunta = '') {
+  const pedidoApp = detectarPedidoAbrirAplicativo(pergunta);
+  if (pedidoApp) return responderAbrirAplicativoUniversal(pedidoApp.app);
   const t = normalizarTexto(pergunta);
   if (/whatsapp/.test(t) && /ligando|ligacao|chamada|atender/.test(t)) {
     return {
@@ -743,6 +856,13 @@ export default async function handler(req, res) {
     motivoFallback: ''
   };
 
+  const pedidoAbrirApp = detectarPedidoAbrirAplicativo(perguntaEfetiva)
+    || (ehRespostaCurtaDeDispositivoOuDuvida(perguntaOriginal) ? detectarPedidoAbrirAplicativoPendente(historico) : null);
+  if (pedidoAbrirApp) {
+    const payload = pacote(TIPOS_PUBLICOS.duvida_digital, responderAbrirAplicativoUniversal(pedidoAbrirApp.app), 'rota_direta_abrir_app');
+    return res.status(200).json(anexarDebugSeguro(payload, { ...debug, guiaEscolhido: 'abrir_aplicativo_universal', origemFinal: payload.origem }));
+  }
+
   if (ehPedidoRepeticao(perguntaOriginal)) {
     const payload = respostaRepeticao(historico);
     return res.status(200).json(anexarDebugSeguro(payload, { ...debug, origemFinal: payload.origem, fallbackUsado: true, motivoFallback: 'pedido_repeticao' }));
@@ -797,5 +917,7 @@ export {
   responderComIAOrientada,
   validarRespostaIA,
   classificarRotaPrincipal,
-  contemRiscoReal
+  contemRiscoReal,
+  detectarPedidoAbrirAplicativo,
+  responderAbrirAplicativoUniversal
 };
