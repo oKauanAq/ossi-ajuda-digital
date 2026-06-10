@@ -5,11 +5,39 @@ import handler, {
   PACOTES_ORIENTACAO,
   classificarRotaPrincipal,
   contemRiscoReal,
+  detectarContinuidadeDeEscolha,
   detectarIntencao,
   montarPacoteIA,
   normalizarTexto,
   validarRespostaIA
 } from '../api/sergio.js';
+
+
+process.env.NVIDIA_API_KEY = 'chave-de-teste-sem-rede';
+const fetchOriginal = globalThis.fetch;
+globalThis.fetch = async (_url, options = {}) => {
+  const pacote = JSON.parse(JSON.parse(options.body).messages[1].content);
+  const pergunta = normalizarTexto(pacote.perguntaAtual);
+  let resposta;
+  if (/volume/.test(pergunta) && /android/.test(pergunta)) {
+    resposta = { respostaSimples: 'No Android, use os botões laterais de volume e confira o controle de mídia na tela.', passoAPasso: ['Aperte o botão de aumentar volume na lateral do celular.', 'Veja se aparece volume de mídia, chamada ou toque.', 'Arraste a barra para a direita.', 'Se não ouvir, confira se o celular não está no silencioso.'], atencao: '', quandoPedirAjuda: '', alertaHumano: '', opcoesFluxo: [] };
+  } else if (/apagar/.test(pergunta) && /iphone/.test(pergunta)) {
+    resposta = { respostaSimples: 'No iPhone, apague aplicativos pela tela inicial ou pela Biblioteca de Apps.', passoAPasso: ['Toque e segure o ícone do aplicativo.', 'Toque em Remover App.', 'Escolha Apagar App.', 'Confirme somente se tiver certeza.'], atencao: 'Evite apagar apps de banco ou serviços importantes sem ajuda.', quandoPedirAjuda: '', alertaHumano: '', opcoesFluxo: [] };
+  } else if (pacote.rotaPrincipal === 'risco_real' || pacote.rotaPrincipal === 'continuidade') {
+    resposta = { respostaSimples: 'Pare e confirme essa situação antes de continuar, pois pode ser golpe.', passoAPasso: ['Não envie dinheiro nem dados.', 'Confirme por um número antigo ou canal oficial.', 'Fale com alguém de confiança antes de agir.'], atencao: 'Golpistas usam pressa e mensagens assustadoras.', quandoPedirAjuda: 'Peça ajuda antes de pagar ou clicar.', alertaHumano: '⚠️ Essa situação é arriscada. Antes de enviar dinheiro, senha ou código, fale pessoalmente com um familiar de confiança ou peça ajuda na Obra Social Santa Isabel.', opcoesFluxo: [] };
+  } else if (pacote.rotaPrincipal === 'duvida_digital') {
+    resposta = { respostaSimples: 'Vou orientar essa dúvida digital com passos simples.', passoAPasso: ['Abra o aplicativo ou configuração indicada.', 'Procure a opção ligada à sua dúvida.', 'Confira a tela antes de confirmar.', 'Se aparecer senha, código, Pix ou link estranho, pare e peça ajuda.'], atencao: 'Use apenas aplicativos oficiais.', quandoPedirAjuda: '', alertaHumano: '', opcoesFluxo: [] };
+  } else if (/mark zuckerberg/.test(pergunta)) {
+    resposta = { respostaSimples: 'Mark Zuckerberg é conhecido por cofundar o Facebook e liderar a Meta.', passoAPasso: [], atencao: '', quandoPedirAjuda: '', alertaHumano: '', opcoesFluxo: [] };
+  } else if (/internet/.test(pergunta)) {
+    resposta = { respostaSimples: 'Internet é uma rede que conecta celulares, computadores, sites e aplicativos.', passoAPasso: ['Ela pode funcionar pelo Wi-Fi ou dados móveis.'], atencao: '', quandoPedirAjuda: '', alertaHumano: '', opcoesFluxo: [] };
+  } else if (/sistema|autor|quem fez/.test(pergunta)) {
+    resposta = { respostaSimples: 'Este sistema é o OSSI Ajuda Digital da Obra Social Santa Isabel; não devo inventar autoria não informada.', passoAPasso: [], atencao: '', quandoPedirAjuda: '', alertaHumano: '', opcoesFluxo: [] };
+  } else {
+    resposta = { respostaSimples: 'Aqui vai uma explicação simples e direta sobre esse assunto.', passoAPasso: [], atencao: '', quandoPedirAjuda: '', alertaHumano: '', opcoesFluxo: [] };
+  }
+  return { ok: true, async json() { return { choices: [{ message: { content: JSON.stringify(resposta) } }] }; } };
+};
 
 function criarReq(pergunta, historico = []) {
   return { method: 'POST', body: { pergunta, historico } };
@@ -58,10 +86,25 @@ assert.ok(PACOTES_ORIENTACAO.tecnologia, 'há pacote de orientação digital');
 assert.ok(PACOTES_ORIENTACAO.risco_real, 'há pacote de orientação de risco');
 assert.equal(PACOTES_ORIENTACAO, GUIAS_LOCAIS, 'PACOTES_ORIENTACAO expõe os guias locais');
 
+// A) Pergunta completa ignora histórico de risco.
+{
+  const historico = [
+    { role: 'user', content: 'Estão me ligando pedindo dinheiro' },
+    { role: 'assistant', content: 'Isso pode ser golpe. Não envie dinheiro.' }
+  ];
+  const payload = await chamar('como abrir o facebook', historico);
+  assert.equal(classificarRotaPrincipal('como abrir o facebook', historico), 'duvida_digital');
+  assert.equal(payload.tipo, 'duvida_digital');
+  assert.notEqual(payload.tipo, 'seguranca');
+  assert.doesNotMatch(textoResposta(payload), /golpe|dinheiro/i);
+}
+
 // A) Perguntas digitais comuns usam rota/guia digital e não viram resposta local rígida de segurança.
 for (const pergunta of [
+  'Como mudar a foto de perfil no Facebook?',
   'Como mudar a foto de perfil no Instagram?',
   'Como eu apago o aplicativo?',
+  'Como abrir o Facebook?',
   'Como atualizar o computador?',
   'Me faça uma lista de exercícios para treinar o uso de celular.',
   'Como mudar a foto de perfil no WhatsApp?'
@@ -89,7 +132,10 @@ for (const pergunta of [
 for (const pergunta of [
   'Me mandaram mensagem pedindo dinheiro.',
   'Estão me ligando por vários números diferentes pedindo dinheiro.',
-  'Uma pessoa com foto do meu filho está pedindo dinheiro.'
+  'Uma pessoa com foto do meu filho está pedindo dinheiro.',
+  'Como saber se a chamada é golpe?',
+  'Recebi um link estranho.',
+  'Vou mandar Pix para desconhecido.'
 ]) {
   const payload = await chamar(pergunta);
   assert.equal(classificarRotaPrincipal(pergunta), 'risco_real', `rota risco real em "${pergunta}"`);
@@ -134,6 +180,45 @@ for (const [pergunta, esperado] of [
   assert.doesNotMatch(payload.resposta.respostaSimples, /^Não faça pagamento nem envie dados agora\./i, 'não repete apenas o bloco anterior quando há pergunta específica');
 }
 
+// G) Continuidade de escolha expande a pergunta antes da IA.
+{
+  const historico = [
+    { role: 'user', content: 'Como aumento o volume?' },
+    { role: 'assistant', content: 'Você usa Android, iPhone ou computador?' }
+  ];
+  const continuidade = detectarContinuidadeDeEscolha('Android', historico);
+  assert.equal(continuidade?.perguntaExpandida, 'Como aumentar o volume no Android?');
+  const payload = await chamar('Android', historico);
+  assert.equal(payload.tipo, 'duvida_digital');
+  assert.match(textoResposta(payload), /android|volume|botões|botoes|lateral/i);
+}
+
+{
+  const historico = [
+    { role: 'user', content: 'Como apago o aplicativo?' },
+    { role: 'assistant', content: 'Você usa Android, iPhone ou computador?' }
+  ];
+  const continuidade = detectarContinuidadeDeEscolha('iPhone', historico);
+  assert.equal(continuidade?.perguntaExpandida, 'Como apagar o aplicativo no iPhone?');
+  const payload = await chamar('iPhone', historico);
+  assert.equal(payload.tipo, 'duvida_digital');
+  assert.match(textoResposta(payload), /iphone|apagar app|remover app|aplicativo/i);
+}
+
+// H) Debug seguro só aparece com SERGIO_DEBUG=true e mascara dados sensíveis.
+{
+  const antigoDebug = process.env.SERGIO_DEBUG;
+  process.env.SERGIO_DEBUG = 'true';
+  const payload = await chamar('Minha senha é 123456');
+  assert.ok(payload.debugSeguro, 'debugSeguro presente quando SERGIO_DEBUG=true');
+  assert.equal(payload.debugSeguro.perguntaNormalizada.includes('123456'), false, 'debug sem senha literal');
+  assert.equal(Object.hasOwn(payload.debugSeguro, 'stack'), false, 'debug sem stack trace');
+  process.env.SERGIO_DEBUG = 'false';
+  const semDebug = await chamar('Como abrir o Facebook?');
+  assert.equal(semDebug.debugSeguro, undefined, 'debugSeguro ausente sem SERGIO_DEBUG=true');
+  if (antigoDebug === undefined) delete process.env.SERGIO_DEBUG; else process.env.SERGIO_DEBUG = antigoDebug;
+}
+
 // G) Validador pós-IA barra respostas inseguras.
 {
   const pacoteIA = montarPacoteIA('Me mandaram mensagem pedindo dinheiro.', 'risco_real', GUIAS_LOCAIS.risco_real, []);
@@ -161,5 +246,7 @@ assert.doesNotMatch(fs.readFileSync(new URL('../js/app.js', import.meta.url), 'u
 
 assert.equal(normalizarTexto('pagar com piks'), 'pagar com pix');
 assert.ok(contemRiscoReal('Uma pessoa com foto do meu filho está pedindo dinheiro.'));
+
+globalThis.fetch = fetchOriginal;
 
 console.log('OK: Sérgio IA-first com guias locais, guardrails e segurança técnica validados.');
