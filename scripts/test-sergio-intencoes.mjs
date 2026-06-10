@@ -27,6 +27,8 @@ globalThis.fetch = async (_url, options = {}) => {
     resposta = { respostaSimples: 'No iPhone, apague aplicativos pela tela inicial ou pela Biblioteca de Apps.', passoAPasso: ['Toque e segure o ícone do aplicativo.', 'Toque em Remover App.', 'Escolha Apagar App.', 'Confirme somente se tiver certeza.'], atencao: 'Evite apagar apps de banco ou serviços importantes sem ajuda.', quandoPedirAjuda: '', alertaHumano: '', opcoesFluxo: [] };
   } else if (pacote.rotaPrincipal === 'risco_real' || pacote.rotaPrincipal === 'continuidade') {
     resposta = { respostaSimples: 'Pare e confirme essa situação antes de continuar, pois pode ser golpe.', passoAPasso: ['Não envie dinheiro nem dados.', 'Confirme por um número antigo ou canal oficial.', 'Fale com alguém de confiança antes de agir.'], atencao: 'Golpistas usam pressa e mensagens assustadoras.', quandoPedirAjuda: 'Peça ajuda antes de pagar ou clicar.', alertaHumano: '⚠️ Essa situação é arriscada. Antes de enviar dinheiro, senha ou código, fale pessoalmente com um familiar de confiança ou peça ajuda na Obra Social Santa Isabel.', opcoesFluxo: [] };
+  } else if (/whatsapp/.test(pergunta) && /abrir|aplicativo|app|entrar/.test(pergunta)) {
+    resposta = { respostaSimples: 'Normalmente, para abrir o WhatsApp, basta tocar no ícone verde do WhatsApp.', passoAPasso: ['Olhe na tela inicial do celular.', 'Procure o ícone verde do WhatsApp.', 'Toque uma vez para abrir.', 'Se aparecer confirmação por código, use somente no seu próprio celular e nunca compartilhe esse código com outra pessoa.'], atencao: 'Nunca envie senha, código, CPF, cartão ou documento para outras pessoas.', quandoPedirAjuda: '', alertaHumano: '', opcoesFluxo: [] };
   } else if (/facebook/.test(pergunta) && /abrir|aplicativo|app/.test(pergunta)) {
     resposta = { respostaSimples: 'Para abrir o Facebook, procure o ícone azul com a letra F e toque nele.', passoAPasso: ['Olhe na tela inicial do celular.', 'Toque no ícone do Facebook.', 'Se não encontrar, use a busca do celular e digite Facebook.'], atencao: 'Use o aplicativo oficial.', quandoPedirAjuda: '', alertaHumano: '', opcoesFluxo: [] };
   } else if (/instagram/.test(pergunta) && /abrir|aplicativo|app/.test(pergunta)) {
@@ -169,6 +171,54 @@ for (const pergunta of [
   assert.match(textoResposta(payload), /instagram|ícone|icone|busca/i);
   assert.doesNotMatch(textoResposta(payload), /posso ajudar com essa dúvida digital|diga se você usa android|diga se voce usa android/i);
   if (antigoDebug === undefined) delete process.env.SERGIO_DEBUG; else process.env.SERGIO_DEBUG = antigoDebug;
+}
+
+
+// B2) Continuidade curta "e whatsapp" preserva a ação anterior de abrir aplicativo.
+{
+  const historico = [
+    { role: 'user', content: 'como abrir aplicativo facebook' },
+    { role: 'assistant', content: 'Procure o ícone azul do Facebook com a letra F e toque nele.' }
+  ];
+  const continuidade = detectarContinuidadeDeEscolha('e whatsapp', historico);
+  assert.equal(continuidade?.perguntaExpandida, 'Como abrir o aplicativo WhatsApp?');
+  const antigoDebug = process.env.SERGIO_DEBUG;
+  process.env.SERGIO_DEBUG = 'true';
+  const payload = await chamar('e whatsapp', historico);
+  assert.equal(payload.debugSeguro?.perguntaEfetiva, 'Como abrir o aplicativo WhatsApp?');
+  assert.equal(payload.tipo, 'duvida_digital');
+  assert.match(textoResposta(payload), /whatsapp|ícone|icone|código|codigo/i);
+  assert.doesNotMatch(textoResposta(payload), /posso ajudar com essa dúvida digital|diga se você usa android|diga se voce usa android/i);
+  if (antigoDebug === undefined) delete process.env.SERGIO_DEBUG; else process.env.SERGIO_DEBUG = antigoDebug;
+}
+
+// B3) Continuidade por dispositivo usa a intenção pendente, não responde sobre Android de forma genérica.
+{
+  const historico = [
+    { role: 'user', content: 'quero abrir o whatsapp' },
+    { role: 'assistant', content: 'Você usa Android, iPhone ou computador?' }
+  ];
+  const continuidade = detectarContinuidadeDeEscolha('android', historico);
+  assert.equal(continuidade?.perguntaExpandida, 'Como abrir o WhatsApp no Android?');
+  const antigoDebug = process.env.SERGIO_DEBUG;
+  process.env.SERGIO_DEBUG = 'true';
+  const payload = await chamar('android', historico);
+  assert.equal(payload.debugSeguro?.perguntaEfetiva, 'Como abrir o WhatsApp no Android?');
+  assert.match(textoResposta(payload), /whatsapp|ícone|icone|código|codigo/i);
+  assert.doesNotMatch(textoResposta(payload), /como usar android|sobre usar android/i);
+  if (antigoDebug === undefined) delete process.env.SERGIO_DEBUG; else process.env.SERGIO_DEBUG = antigoDebug;
+}
+
+// B4) Se a pessoa não sabe Android/iPhone, explicar sem bloquear o fluxo.
+{
+  const historico = [
+    { role: 'user', content: 'quero abrir o whatsapp' },
+    { role: 'assistant', content: 'Você usa Android, iPhone ou computador?' }
+  ];
+  const payload = await chamar('não sei qual é', historico);
+  assert.equal(payload.tipo, 'duvida_digital');
+  assert.match(textoResposta(payload), /android|samsung|motorola|xiaomi|iphone|apple|ícone|icone/i);
+  assert.doesNotMatch(textoResposta(payload), /não entendi bem|nao entendi bem|não ficou claro|nao ficou claro/i);
 }
 
 // C) Ligação no WhatsApp com erro de digitação recebe orientação prática, não institucional.
@@ -318,6 +368,14 @@ for (const [pergunta, esperado] of [
   const pacoteDigital = montarPacoteIA('Estão me ligando no WhatsApp.', 'duvida_digital', GUIAS_LOCAIS.tecnologia, []);
   const preventiva = validarRespostaIA({ respostaSimples: 'Não passe senha, código, CPF, banco ou documento pelo WhatsApp.', passoAPasso: ['Não clique em link estranho recebido por mensagem.'], alertaHumano: '' }, pacoteDigital);
   assert.equal(preventiva.ok, true);
+}
+
+
+// F) Textos finais não expõem linguagem interna nem login/senha de WhatsApp.
+{
+  const whatsappAndroid = await chamar('mas como abro o whatsapp no android');
+  assert.doesNotMatch(textoResposta(whatsappAndroid), new RegExp(['durante\\s+testes', 'senha do whats' + 'app', 'login com (?:seu )?n[uú]mero e senha', 'faça login com (?:seu )?n[uú]mero e senha'].join('|'), 'i'));
+  assert.match(textoResposta(whatsappAndroid), /whatsapp|ícone|icone|código|codigo|nunca compartilhe/i);
 }
 
 // G) Segurança técnica solicitada.

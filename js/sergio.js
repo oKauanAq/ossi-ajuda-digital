@@ -60,17 +60,23 @@ function sanitizarResposta(item = {}) {
 }
 
 function detectarApoioVisual(resposta = '', pergunta = '', tipo = '') {
+  const perguntaNorm = normalizarTexto(pergunta);
   const base = normalizarTexto(`${resposta} ${pergunta} ${tipo}`);
-  const pedidoDinheiro = /(pedindo|pediu|pediram|pede|pedir|pedido).{0,24}(dinheiro|pix|transferencia|valor)|(?:dinheiro|pix|transferencia|valor).{0,24}(urgente|agora|rapido)/.test(base);
+  const pedidoDinheiro = /(pedindo|pediu|pediram|pede|pedir|pedido).{0,24}(dinheiro|pix|transferencia|valor)|(?:dinheiro|pix|transferencia|valor).{0,24}(urgente|agora|rapido)/.test(perguntaNorm);
+  const pedidoSensivel = /(pedindo|pediu|pediram|pede|pedir|pedido).{0,24}(senha|codigo|link|banco|cartao|cpf)|(?:senha|codigo|link|banco|cartao|cpf).{0,24}(pedindo|pediu|pediram|pede|pedir|pedido)/.test(perguntaNorm);
   const familiarFalso = /(foto|nome|numero novo|outro numero).{0,36}(filho|filha|irmao|irma|mae|pai|familiar|parente)|(?:filho|filha|irmao|irma|mae|pai|familiar|parente).{0,36}(foto|nome|numero novo|outro numero)/.test(base);
   const linkSuspeito = /(link).{0,28}(estranho|suspeito|promocao|premio|desconhecido|whatsapp)|(?:estranho|suspeito|promocao|premio|desconhecido).{0,28}(link)/.test(base);
   const golpeExplicito = /\bgolpe\b|numero desconhecido|numero novo/.test(base);
 
-  if (pedidoDinheiro || familiarFalso || linkSuspeito || golpeExplicito) {
+  if (pedidoDinheiro || pedidoSensivel || familiarFalso || linkSuspeito || golpeExplicito) {
     return { emoji: '🛡️', titulo: 'Cuidado com golpe' };
   }
 
-  const senhaConta = /(senha|recuperar senha|recuperar conta|login|codigo de verificacao|acesso ao whatsapp|acesso ao facebook|acesso ao instagram|gov\.br|banco.{0,20}senha|senha.{0,20}banco|entrar.{0,20}(whatsapp|facebook|instagram|gov\.br|banco)|acesso.{0,20}(whatsapp|facebook|instagram|gov\.br|banco))/.test(base);
+  if (/whats/.test(perguntaNorm) && /(ligando|ligacao|chamada|atender)/.test(perguntaNorm)) {
+    return { emoji: '🟢', titulo: 'WhatsApp' };
+  }
+
+  const senhaConta = /(senha|recuperar senha|recuperar conta|login|codigo de verificacao|acesso ao whatsapp|acesso ao facebook|acesso ao instagram|gov\.br|banco.{0,20}senha|senha.{0,20}banco|entrar.{0,20}(whatsapp|facebook|instagram|gov\.br|banco)|acesso.{0,20}(whatsapp|facebook|instagram|gov\.br|banco))/.test(perguntaNorm);
   if (senhaConta) {
     return { emoji: '🔐', titulo: 'Senha e conta' };
   }
