@@ -7,6 +7,7 @@ import handler, {
   contemRiscoReal,
   detectarContinuidadeDeEscolha,
   detectarIntencao,
+  extrairEstadoConversacional,
   montarPacoteIA,
   normalizarTexto,
   validarRespostaIA
@@ -221,6 +222,64 @@ for (const pergunta of [
   assert.doesNotMatch(textoResposta(payload), /não entendi bem|nao entendi bem|não ficou claro|nao ficou claro/i);
 }
 
+// B5) Estado conversacional mínimo registra ação, alvo e pergunta pendente.
+{
+  const historico = [
+    { role: 'user', content: 'quero abrir o whatsapp mas não to achando ele' },
+    { role: 'assistant', content: 'Você usa Android, iPhone ou computador?' }
+  ];
+  const estado = extrairEstadoConversacional(historico);
+  assert.equal(estado.ultimaAcaoUsuario, 'abrir_app');
+  assert.equal(estado.ultimoAlvo, 'whatsapp');
+  assert.equal(estado.dispositivoPendente, true);
+  assert.match(estado.ultimaPerguntaNaoResolvida, /whatsapp/i);
+  assert.match(estado.ultimaPerguntaUsuarioClara, /whatsapp/i);
+}
+
+// B6) Não achar WhatsApp recebe passos diretos sem perguntar Android/iPhone antes.
+{
+  const payload = await chamar('quero abrir o whatsapp mas não to achando ele');
+  assert.equal(payload.tipo, 'duvida_digital');
+  assert.match(textoResposta(payload), /ícone|icone|tela inicial|deslize|busca|play store|app store/i);
+  assert.doesNotMatch(textoResposta(payload), /diga se você usa android|diga se voce usa android|você usa android, iphone ou computador|voce usa android, iphone ou computador/i);
+}
+
+// B7) Erro de digitação Android usa dúvida pendente sobre encontrar WhatsApp.
+{
+  const historico = [
+    { role: 'user', content: 'quero abrir o whatsapp mas não to achando ele' },
+    { role: 'assistant', content: 'Você usa Android, iPhone ou computador?' }
+  ];
+  const continuidade = detectarContinuidadeDeEscolha('andoid', historico);
+  assert.equal(continuidade?.perguntaExpandida, 'Como encontrar e abrir o WhatsApp no Android?');
+  const antigoDebug = process.env.SERGIO_DEBUG;
+  process.env.SERGIO_DEBUG = 'true';
+  const payload = await chamar('andoid', historico);
+  assert.equal(payload.debugSeguro?.perguntaEfetiva, 'Como encontrar e abrir o WhatsApp no Android?');
+  assert.match(textoResposta(payload), /whatsapp|ícone|icone|busca|play store|app store/i);
+  assert.doesNotMatch(textoResposta(payload), /como usar android|sobre usar android|o que é android|o que e android/i);
+  if (antigoDebug === undefined) delete process.env.SERGIO_DEBUG; else process.env.SERGIO_DEBUG = antigoDebug;
+}
+
+// B8) Reclamação do usuário responde diretamente em vez de pedir dispositivo de novo.
+{
+  const payload = await chamar('vc não me falou como abrir o whatasapp no celular ainda');
+  assert.equal(payload.tipo, 'duvida_digital');
+  assert.match(textoResposta(payload), /desculpe|whatsapp|ícone|icone|busca/i);
+  assert.doesNotMatch(textoResposta(payload), /diga se você usa android|diga se voce usa android|você usa android, iphone ou computador|voce usa android, iphone ou computador/i);
+}
+
+// B9) Bloqueio de vazamento interno remove linguagem de instrução das respostas finais.
+{
+  const proibidos = /Explique de forma simples|sem detalhes técnicos|dados não confirmados|use apenas o que está informado no sistema|não devo inventar|prompt|guia local|pacote de orientação|durante testes/i;
+  const payloads = [
+    await chamar('Quem fez esse sistema?'),
+    await chamar('vc não me falou como abrir o whatasapp no celular ainda'),
+    await chamar('como abrir aplicativo facebook')
+  ];
+  for (const payload of payloads) assert.doesNotMatch(textoResposta(payload), proibidos);
+}
+
 // C) Ligação no WhatsApp com erro de digitação recebe orientação prática, não institucional.
 {
   const payload = await chamar('estam me ligando no whatsaapp');
@@ -283,7 +342,7 @@ for (const pergunta of ['Minha senha é 123456', 'Meu CPF é 12345678900']) {
 for (const [pergunta, esperado] of [
   ['Quem é Mark Zuckerberg?', /facebook|meta/i],
   ['O que é internet?', /rede|conecta|wi/i],
-  ['Quem fez esse sistema?', /ossi ajuda digital|obra social santa isabel|não devo inventar/i]
+  ['Quem fez esse sistema?', /ossi ajuda digital|obra social santa isabel|confirme detalhes/i]
 ]) {
   const payload = await chamar(pergunta);
   assert.equal(classificarRotaPrincipal(pergunta), 'duvida_geral');
