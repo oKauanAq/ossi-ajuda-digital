@@ -1,2 +1,7 @@
 __pycache__/
 *.py[cod]
+# Arquivos de ambiente — nunca commitar chaves reais
+.env
+.env.local
+.env.*
+!.env.example
