@@ -187,14 +187,10 @@ function assertGuiaUniversalApp(payload, appRegex, mensagem = '') {
   ];
   const continuidade = detectarContinuidadeDeEscolha('e o instagram', historico);
   assert.equal(continuidade?.perguntaExpandida, 'Como abrir o aplicativo Instagram?');
-  const antigoDebug = process.env.SERGIO_DEBUG;
-  process.env.SERGIO_DEBUG = 'true';
   const payload = await chamar('e o instagram', historico);
-  assert.equal(payload.debugSeguro?.perguntaEfetiva, 'Como abrir o aplicativo Instagram?');
   assert.equal(payload.tipo, 'duvida_digital');
   assert.match(textoResposta(payload), /instagram|ícone|icone|busca/i);
   assert.doesNotMatch(textoResposta(payload), /posso ajudar com essa dúvida digital|diga se você usa android|diga se voce usa android/i);
-  if (antigoDebug === undefined) delete process.env.SERGIO_DEBUG; else process.env.SERGIO_DEBUG = antigoDebug;
 }
 
 
@@ -206,14 +202,10 @@ function assertGuiaUniversalApp(payload, appRegex, mensagem = '') {
   ];
   const continuidade = detectarContinuidadeDeEscolha('e whatsapp', historico);
   assert.equal(continuidade?.perguntaExpandida, 'Como abrir o aplicativo WhatsApp?');
-  const antigoDebug = process.env.SERGIO_DEBUG;
-  process.env.SERGIO_DEBUG = 'true';
   const payload = await chamar('e whatsapp', historico);
-  assert.equal(payload.debugSeguro?.perguntaEfetiva, 'Como abrir o aplicativo WhatsApp?');
   assert.equal(payload.tipo, 'duvida_digital');
   assert.match(textoResposta(payload), /whatsapp|ícone|icone|código|codigo/i);
   assert.doesNotMatch(textoResposta(payload), /posso ajudar com essa dúvida digital|diga se você usa android|diga se voce usa android/i);
-  if (antigoDebug === undefined) delete process.env.SERGIO_DEBUG; else process.env.SERGIO_DEBUG = antigoDebug;
 }
 
 // B3) Continuidade por dispositivo usa a intenção pendente, não responde sobre Android de forma genérica.
@@ -224,13 +216,9 @@ function assertGuiaUniversalApp(payload, appRegex, mensagem = '') {
   ];
   const continuidade = detectarContinuidadeDeEscolha('android', historico);
   assert.equal(continuidade?.perguntaExpandida, 'Como abrir o aplicativo WhatsApp?');
-  const antigoDebug = process.env.SERGIO_DEBUG;
-  process.env.SERGIO_DEBUG = 'true';
   const payload = await chamar('android', historico);
-  assert.equal(payload.debugSeguro?.perguntaEfetiva, 'Como abrir o aplicativo WhatsApp?');
   assertGuiaUniversalApp(payload, /whatsapp|telefone branco/i, 'android após abrir app');
   assert.doesNotMatch(textoResposta(payload), /como usar android|sobre usar android/i);
-  if (antigoDebug === undefined) delete process.env.SERGIO_DEBUG; else process.env.SERGIO_DEBUG = antigoDebug;
 }
 
 // B4) Se a pessoa não sabe Android/iPhone após pedir para abrir app, volta ao guia universal.
@@ -380,36 +368,10 @@ for (const [pergunta, esperado] of [
   assert.match(textoResposta(payload), /iphone|apagar app|remover app|aplicativo/i);
 }
 
-// H) Debug seguro só aparece com SERGIO_DEBUG=true e mascara dados sensíveis.
+// H) debugSeguro não é retornado ao cliente (apenas logado no servidor).
 {
-  const antigoDebug = process.env.SERGIO_DEBUG;
-  process.env.SERGIO_DEBUG = 'true';
-  const payload = await chamar('Minha senha é 123456');
-  assert.ok(payload.debugSeguro, 'debugSeguro presente quando SERGIO_DEBUG=true');
-  assert.equal(payload.debugSeguro.perguntaNormalizada.includes('123456'), false, 'debug sem senha literal');
-  for (const campo of ['perguntaNormalizada', 'perguntaEfetiva', 'rotaPrincipal', 'guiaEscolhido', 'chamouIA', 'iaOk', 'validacaoRejeitou', 'motivoValidacao', 'fallbackUsado', 'motivoFallback', 'origemFinal']) {
-    assert.ok(Object.hasOwn(payload.debugSeguro, campo), `debugSeguro contém ${campo}`);
-  }
-  assert.equal(Object.hasOwn(payload.debugSeguro, 'stack'), false, 'debug sem stack trace');
-  const debugDigital = await chamar('como aumentar volume celular');
-  assert.equal(debugDigital.debugSeguro.chamouIA, true);
-  assert.equal(debugDigital.debugSeguro.iaOk, true);
-  assert.equal(debugDigital.debugSeguro.fallbackUsado, false);
-  const debugAppDireto = await chamar('Como abrir o Facebook?');
-  assert.equal(debugAppDireto.debugSeguro.chamouIA, false);
-  assert.equal(debugAppDireto.debugSeguro.origemFinal, 'rota_direta_abrir_app');
-  const chave = process.env.NVIDIA_API_KEY;
-  delete process.env.NVIDIA_API_KEY;
-  const debugFallback = await chamar('como aumentar volume celular');
-  assert.equal(debugFallback.debugSeguro.chamouIA, false);
-  assert.equal(debugFallback.debugSeguro.iaOk, false);
-  assert.equal(debugFallback.debugSeguro.fallbackUsado, true);
-  assert.equal(debugFallback.debugSeguro.motivoFallback, 'ia_indisponivel');
-  process.env.NVIDIA_API_KEY = chave;
-  process.env.SERGIO_DEBUG = 'false';
-  const semDebug = await chamar('Como abrir o Facebook?');
-  assert.equal(semDebug.debugSeguro, undefined, 'debugSeguro ausente sem SERGIO_DEBUG=true');
-  if (antigoDebug === undefined) delete process.env.SERGIO_DEBUG; else process.env.SERGIO_DEBUG = antigoDebug;
+  const payload = await chamar('Como abrir o Facebook?');
+  assert.equal(payload.debugSeguro, undefined, 'debugSeguro nunca retorna ao cliente');
 }
 
 // G) Validador pós-IA barra respostas inseguras, mas permite alertas preventivos.
