@@ -401,8 +401,7 @@ function initSergio() {
     } catch (_) {
       if (requestId !== sergioRequestId) return; historicoSergio.pop();
       const melhor = encontrarMelhorResposta(FAQ, pergunta);
-      historicoSergio.push(melhor ? { role: 'assistant', content: melhor.respostaSimples, respostaEstruturada: melhor, contextoPergunta: pergunta } : { role: 'assistant', content: 'Modo local: na versão Vercel eu também uso IA. Tente explicar com mais detalhes.' });
-    } finally {
+       'Não consegui responder agora. Tente explicar sua dúvida com outras palavras.'    } finally {
       perguntasEmAndamento.delete(pergunta);
       if (requestId === sergioRequestId) { botao.disabled = false; botao.textContent = 'Enviar'; renderChatSergio(); salvarHistorico(); }
     }
