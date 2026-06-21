@@ -813,7 +813,6 @@ function anexarDebugSeguro(payload, debug) {
   const resumo = criarDebugSeguro({ ...debug, origemFinal: payload?.origem || debug.origemFinal });
   if (process.env.SERGIO_DEBUG === 'true') {
     console.info(`[sergio-debug] rota=${resumo.rotaPrincipal} guia=${resumo.guiaEscolhido} chamouIA=${resumo.chamouIA} fallback=${resumo.fallbackUsado}`);
-    return { ...payload, debugSeguro: resumo };
   }
   return payload;
 }
