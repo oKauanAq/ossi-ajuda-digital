@@ -157,8 +157,10 @@ function abrirChat(pergunta = '') {
   else pendingSergioAction = { tipo: 'pergunta', valor: pergunta };
 }
 function initOpcoesRapidas() {
-  document.getElementById('chips-assuntos').innerHTML = renderChips(OPCOES_RAPIDAS);
-  document.getElementById('chips-duvidas').innerHTML = renderChips(DUVIDAS_COMUNS, 'secundario');
+  const elAssuntos = document.getElementById('chips-assuntos');
+  const elDuvidas = document.getElementById('chips-duvidas');
+  if (elAssuntos) elAssuntos.innerHTML = renderChips(OPCOES_RAPIDAS);
+  if (elDuvidas) elDuvidas.innerHTML = renderChips(DUVIDAS_COMUNS, 'secundario');
 }
 function fecharPaineisOpcoes() { document.getElementById('painel-assuntos')?.removeAttribute('open'); document.getElementById('painel-duvidas')?.removeAttribute('open'); }
 
