@@ -541,7 +541,7 @@ function historicoSeguroLimitado(historico = [], rota = 'duvida_geral', pergunta
   return historico
     .slice(-4)
     .filter((m) => m && typeof m.content === 'string' && !temDadoPessoal(m.content))
-    .map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: limparCampoResposta(m.content).slice(0, 180) }));
+    .map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: limparCampoResposta(m.content).slice(0, 400) }));
 }
 
 function montarPacoteIA(perguntaAtual, rota, guiaLocal, historicoSeguro = []) {
