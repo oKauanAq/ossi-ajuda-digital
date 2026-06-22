@@ -425,7 +425,7 @@ function assistentePerguntouDispositivo(historico = []) {
   const ultima = ultimaMensagemPorRole(historico, 'assistant');
   if (!ultima) return false;
   const t = normalizarTexto(ultima.content);
-  return /android/.test(t) && /iphone/.test(t) && /computador/.test(t);
+  return (/android/.test(t) || /iphone/.test(t)) && (/computador/.test(t) || /orientar/.test(t));
 }
 
 function usuarioNaoSabeDispositivo(perguntaAtual = '', historicoSeguro = []) {
